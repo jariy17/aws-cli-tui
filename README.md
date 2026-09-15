@@ -43,6 +43,14 @@ Install the `awstui` command globally:
 npm install --global github:jariy17/aws-cli-tui
 ```
 
+If this checkout was previously installed with `npm link`, unlink that
+development installation once before switching to the GitHub package:
+
+```bash
+npm unlink --global aws-cli-tui
+npm install --global github:jariy17/aws-cli-tui
+```
+
 Then launch it with an AWS CLI profile and region:
 
 ```bash

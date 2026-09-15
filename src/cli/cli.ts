@@ -9,7 +9,7 @@ export function createProgram(): Command {
     new Command()
       .name("awstui")
       .description("Search-first TUI for read-only AWS APIs")
-      .version("0.1.0")
+      .version("0.1.1")
       .showHelpAfterError()
       .showSuggestionAfterError(),
   );

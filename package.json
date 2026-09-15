@@ -1,6 +1,6 @@
 {
   "name": "aws-cli-tui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Search-first terminal UI for read-only AWS CLI operations generated from public Smithy models",
   "type": "module",
   "bin": {
@@ -8,13 +8,13 @@
   },
   "files": [
     "dist",
+    "src/model/generated/catalog.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "build": "tsc -p tsconfig.build.json",
     "models:generate": "node scripts/generate-catalog.mjs",
-    "prepare": "npm run build",
     "start": "tsx src/cli/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

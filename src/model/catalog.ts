@@ -86,7 +86,7 @@ export class SmithyCatalog {
   public static async load(): Promise<SmithyCatalog> {
     if (!cachedCatalog) {
       const contents = await readFile(
-        new URL("./generated/catalog.json", import.meta.url),
+        new URL("../../src/model/generated/catalog.json", import.meta.url),
         "utf8",
       );
       cachedCatalog = JSON.parse(contents) as Catalog;

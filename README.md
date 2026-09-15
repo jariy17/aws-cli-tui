@@ -37,18 +37,26 @@ customer or account data.
 
 ## Install from GitHub
 
-Install the `awstui` command globally:
+Install the packaged GitHub release:
 
 ```bash
-npm install --global github:jariy17/aws-cli-tui
+npm install --global \
+  https://github.com/jariy17/aws-cli-tui/releases/download/v0.1.1/aws-cli-tui-0.1.1.tgz
 ```
 
-If this checkout was previously installed with `npm link`, unlink that
-development installation once before switching to the GitHub package:
+To install the latest `main` branch instead, force npm to materialize Git
+dependencies rather than linking its temporary checkout:
+
+```bash
+npm install --global --install-links github:jariy17/aws-cli-tui
+```
+
+If the project was previously installed with `npm link`, unlink that
+development installation once before switching:
 
 ```bash
 npm unlink --global aws-cli-tui
-npm install --global github:jariy17/aws-cli-tui
+npm install --global --install-links github:jariy17/aws-cli-tui
 ```
 
 Then launch it with an AWS CLI profile and region:

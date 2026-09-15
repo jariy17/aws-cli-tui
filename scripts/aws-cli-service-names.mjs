@@ -1,0 +1,67 @@
+const AWS_CLI_SERVICE_NAME_OVERRIDES = {
+  "api-gateway": "apigateway",
+  "app-mesh": "appmesh",
+  "application-auto-scaling": "application-autoscaling",
+  "application-discovery-service": "discovery",
+  "auto-scaling": "autoscaling",
+  "auto-scaling-plans": "autoscaling-plans",
+  "cloudhsm-v2": "cloudhsmv2",
+  "cloudsearch-domain": "cloudsearchdomain",
+  "cloudwatch-logs": "logs",
+  "cognito-identity-provider": "cognito-idp",
+  "config-service": "configservice",
+  "cost-and-usage-report-service": "cur",
+  "cost-explorer": "ce",
+  "data-pipeline": "datapipeline",
+  "database-migration-service": "dms",
+  "device-farm": "devicefarm",
+  "direct-connect": "directconnect",
+  "directory-service": "ds",
+  "directory-service-data": "ds-data",
+  "dynamodb-streams": "dynamodbstreams",
+  "elastic-beanstalk": "elasticbeanstalk",
+  "elastic-load-balancing": "elb",
+  "elastic-load-balancing-v2": "elbv2",
+  "elasticsearch-service": "es",
+  eventbridge: "events",
+  "global-accelerator": "globalaccelerator",
+  "iot-data-plane": "iot-data",
+  "iot-jobs-data-plane": "iot-jobs-data",
+  "iot-wireless": "iotwireless",
+  "kinesis-analytics": "kinesisanalytics",
+  "kinesis-analytics-v2": "kinesisanalyticsv2",
+  "kinesis-video": "kinesisvideo",
+  "lex-model-building-service": "lex-models",
+  "lex-models-v2": "lexv2-models",
+  "lex-runtime-service": "lex-runtime",
+  "lex-runtime-v2": "lexv2-runtime",
+  "machine-learning": "machinelearning",
+  "marketplace-commerce-analytics": "marketplacecommerceanalytics",
+  "marketplace-entitlement-service": "marketplace-entitlement",
+  "marketplace-metering": "meteringmarketplace",
+  "migration-hub": "mgh",
+  "resource-groups-tagging-api": "resourcegroupstaggingapi",
+  "route-53": "route53",
+  "route-53-domains": "route53domains",
+  "s3-control": "s3control",
+  "secrets-manager": "secretsmanager",
+  serverlessapplicationrepository: "serverlessrepo",
+  "service-catalog": "servicecatalog",
+  "service-catalog-appregistry": "servicecatalog-appregistry",
+  sfn: "stepfunctions",
+  "storage-gateway": "storagegateway",
+};
+
+const UNSUPPORTED_AWS_CLI_MODEL_DIRECTORIES = new Set([
+  "cloudwatch-events",
+  "iam-toolbox",
+  "sagemaker-runtime-http2",
+  "transcribe-streaming",
+]);
+
+export function awsCliServiceName(modelDirectory) {
+  if (UNSUPPORTED_AWS_CLI_MODEL_DIRECTORIES.has(modelDirectory)) {
+    return undefined;
+  }
+  return AWS_CLI_SERVICE_NAME_OVERRIDES[modelDirectory] ?? modelDirectory;
+}

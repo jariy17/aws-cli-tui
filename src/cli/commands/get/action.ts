@@ -1,0 +1,21 @@
+import { AwsCliExecutor } from "../../../execution/aws-cli-executor.js";
+import type { AwsContext } from "../../../execution/types.js";
+import { parseInputPairs } from "../../input.js";
+import { resolveOperation } from "../../resolve.js";
+
+export async function runGet(
+  search: string,
+  pairs: string[],
+  context: AwsContext,
+): Promise<Record<string, unknown>> {
+  const entry = await resolveOperation(search, "get");
+  const input = parseInputPairs(entry, pairs);
+  const executor = new AwsCliExecutor(context);
+  const result = await executor.execute(entry, input);
+  return {
+    service: result.entry.serviceTitle,
+    serviceCommand: result.entry.serviceCliName,
+    operation: result.entry.operationName,
+    data: result.output,
+  };
+}

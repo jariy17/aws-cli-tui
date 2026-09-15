@@ -1,0 +1,2033 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Implementation plan and interactive terminal mockups for a Smithy-driven AWS CLI TUI."
+    />
+    <base target="_blank" />
+    <title>aws-tui — build plan and terminal prototype</title>
+    <style>
+      :root {
+        /* Reference: a 1980s industrial instrument manual with orange safety tabs. */
+        --paper: oklch(96.5% 0.008 235);
+        --paper-raised: oklch(99% 0.004 235);
+        --ink: oklch(22% 0.025 244);
+        --muted: oklch(48% 0.035 239);
+        --line: oklch(78% 0.022 237);
+        --line-strong: oklch(62% 0.035 239);
+        --accent: oklch(56% 0.17 43);
+        --accent-dark: oklch(43% 0.145 43);
+        --accent-wash: oklch(91% 0.045 52);
+        --terminal: oklch(18% 0.018 245);
+        --terminal-panel: oklch(22% 0.023 244);
+        --terminal-rule: oklch(37% 0.035 240);
+        --terminal-ink: oklch(91% 0.015 225);
+        --terminal-muted: oklch(68% 0.04 230);
+        --terminal-accent: oklch(78% 0.12 65);
+        --terminal-blue: oklch(75% 0.09 220);
+        --terminal-warn: oklch(82% 0.13 92);
+        --good: oklch(58% 0.12 150);
+        --bad: oklch(57% 0.17 25);
+        --s1: 0.25rem;
+        --s2: 0.5rem;
+        --s3: 0.75rem;
+        --s4: 1rem;
+        --s6: 1.5rem;
+        --s8: 2rem;
+        --s12: 3rem;
+        --s16: 4rem;
+        --sans: "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
+        --display:
+          "Arial Narrow", "Avenir Next Condensed", "Franklin Gothic Medium",
+          sans-serif;
+        --mono:
+          ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas,
+          monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        background: var(--paper);
+      }
+      body {
+        margin: 0;
+        min-width: 20rem;
+        min-height: 100dvh;
+        color: var(--ink);
+        background:
+          linear-gradient(
+              90deg,
+              transparent 0,
+              transparent calc(100% - 1px),
+              color-mix(in oklch, var(--line) 35%, transparent) calc(100% - 1px)
+            )
+            0 0 / 4rem 100%,
+          var(--paper);
+        font: 400 clamp(0.96rem, 0.92rem + 0.16vw, 1.08rem)/1.6 var(--sans);
+        text-rendering: optimizeLegibility;
+      }
+
+      a {
+        color: var(--accent-dark);
+        text-underline-offset: 0.18em;
+      }
+      a:hover {
+        color: var(--accent);
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      code,
+      pre,
+      kbd {
+        font-family: var(--mono);
+      }
+      code {
+        padding: 0.08em 0.3em;
+        background: color-mix(in oklch, var(--line) 35%, transparent);
+        font-size: 0.9em;
+      }
+      kbd {
+        display: inline-block;
+        min-width: 1.7em;
+        padding: 0.08em 0.35em;
+        border: 1px solid currentColor;
+        border-bottom-width: 2px;
+        color: inherit;
+        font-size: 0.78em;
+        line-height: 1.35;
+        text-align: center;
+      }
+
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      .skip-link {
+        position: fixed;
+        z-index: 100;
+        top: 0.75rem;
+        left: 0.75rem;
+        transform: translateY(-180%);
+        padding: 0.6rem 0.9rem;
+        background: var(--ink);
+        color: var(--paper);
+      }
+      .skip-link:focus {
+        transform: none;
+      }
+
+      .shell {
+        width: 100%;
+        min-height: 100dvh;
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.7fr);
+        min-height: min(48rem, 88dvh);
+        border-bottom: 1px solid var(--line-strong);
+        background: var(--paper-raised);
+      }
+      .mast-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: clamp(1.5rem, 5vw, 5rem);
+        border-right: 1px solid var(--line-strong);
+      }
+      .issue-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem 1.4rem;
+        color: var(--muted);
+        font: 600 0.74rem/1.4 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .wordmark {
+        margin: var(--s12) 0 var(--s6);
+        color: var(--ink);
+        font: 800 clamp(4rem, 11vw, 9rem)/0.82 var(--display);
+        letter-spacing: -0.055em;
+        text-transform: uppercase;
+        text-wrap: balance;
+      }
+      .wordmark span {
+        color: var(--accent);
+      }
+      .lede {
+        max-width: 53ch;
+        margin: 0;
+        font-size: clamp(1.1rem, 1rem + 0.45vw, 1.45rem);
+        line-height: 1.45;
+        text-wrap: pretty;
+      }
+      .mast-note {
+        align-self: end;
+        padding-top: var(--s12);
+        color: var(--muted);
+        font: 0.8rem/1.55 var(--mono);
+      }
+      .manifest {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background: var(--ink);
+        color: var(--paper);
+      }
+      .manifest h2 {
+        margin: 0;
+        padding: var(--s6);
+        border-bottom: 1px solid
+          color-mix(in oklch, var(--paper) 24%, transparent);
+        color: var(--terminal-accent);
+        font: 700 1rem/1.3 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .manifest dl {
+        margin: 0;
+      }
+      .manifest-row {
+        display: grid;
+        grid-template-columns: 7rem 1fr;
+        gap: var(--s4);
+        padding: var(--s4) var(--s6);
+        border-bottom: 1px solid
+          color-mix(in oklch, var(--paper) 14%, transparent);
+      }
+      .manifest dt {
+        color: var(--terminal-muted);
+        font: 0.74rem/1.5 var(--mono);
+        text-transform: uppercase;
+      }
+      .manifest dd {
+        margin: 0;
+        font: 600 0.9rem/1.5 var(--mono);
+      }
+      .manifest .launch {
+        padding: var(--s6);
+        background: var(--accent);
+        color: oklch(98% 0.01 70);
+        font: 800 clamp(1.2rem, 1rem + 0.8vw, 1.8rem)/1.2 var(--display);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      .rail {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        display: flex;
+        gap: 0.2rem;
+        overflow-x: auto;
+        padding: 0.55rem clamp(1rem, 3vw, 3rem);
+        border-bottom: 1px solid var(--line-strong);
+        background: color-mix(in oklch, var(--paper-raised) 94%, transparent);
+        backdrop-filter: blur(8px);
+        scrollbar-width: thin;
+      }
+      .rail a {
+        flex: 0 0 auto;
+        padding: 0.35rem 0.7rem;
+        color: var(--ink);
+        font: 700 0.74rem/1.3 var(--mono);
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+      .rail a:hover {
+        background: var(--accent-wash);
+        color: var(--accent-dark);
+      }
+
+      main {
+        display: block;
+      }
+      .section {
+        display: grid;
+        grid-template-columns: minmax(12rem, 0.34fr) minmax(0, 1fr);
+        gap: clamp(2rem, 5vw, 6rem);
+        padding: clamp(3rem, 7vw, 7rem) clamp(1rem, 5vw, 5rem);
+        border-bottom: 1px solid var(--line-strong);
+      }
+      .section > header {
+        align-self: start;
+      }
+      .section h2 {
+        margin: 0 0 var(--s4);
+        font: 800 clamp(2rem, 3vw, 3.6rem)/0.98 var(--display);
+        letter-spacing: -0.025em;
+        text-transform: uppercase;
+        text-wrap: balance;
+      }
+      .section-intro {
+        max-width: 30ch;
+        margin: 0;
+        color: var(--muted);
+      }
+      .section-body {
+        min-width: 0;
+      }
+      .section-body > :first-child {
+        margin-top: 0;
+      }
+
+      .decision {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(14rem, 0.55fr);
+        gap: 1px;
+        border: 1px solid var(--line-strong);
+        background: var(--line-strong);
+      }
+      .decision > div {
+        padding: clamp(1.2rem, 2vw, 2rem);
+        background: var(--paper-raised);
+      }
+      .decision h3,
+      .subhead {
+        margin: 0 0 var(--s3);
+        font: 800 1rem/1.3 var(--mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .decision p {
+        margin: 0;
+      }
+      .decision ul {
+        margin: var(--s3) 0 0;
+        padding-left: 1.2rem;
+      }
+      .decision li + li {
+        margin-top: 0.35rem;
+      }
+
+      .terminal-wrap {
+        border: 1px solid var(--terminal-rule);
+        background: var(--terminal);
+        color: var(--terminal-ink);
+        box-shadow: 0 0.7rem 2rem
+          color-mix(in oklch, var(--ink) 18%, transparent);
+      }
+      .terminal-chrome {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: var(--s4);
+        align-items: center;
+        min-height: 2.65rem;
+        padding: 0.5rem 0.8rem;
+        border-bottom: 1px solid var(--terminal-rule);
+        color: var(--terminal-muted);
+        font: 0.72rem/1.2 var(--mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .lights {
+        display: flex;
+        gap: 0.35rem;
+      }
+      .light {
+        width: 0.68rem;
+        height: 0.68rem;
+        border: 1px solid var(--terminal-rule);
+        border-radius: 50%;
+      }
+      .light:first-child {
+        background: var(--accent);
+      }
+      .terminal-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .terminal-screen {
+        min-height: clamp(31rem, 62dvh, 46rem);
+        padding: clamp(0.7rem, 2vw, 1.15rem);
+        font: clamp(0.7rem, 0.64rem + 0.18vw, 0.86rem)/1.42 var(--mono);
+        overflow: hidden;
+      }
+      .screen {
+        display: none;
+      }
+      .screen.active {
+        display: block;
+      }
+      .tui-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.4rem 1rem;
+        padding-bottom: 0.55rem;
+        border-bottom: 1px solid var(--terminal-rule);
+      }
+      .tui-brand {
+        color: var(--terminal-accent);
+        font-weight: 800;
+      }
+      .context {
+        color: var(--terminal-muted);
+      }
+      .tui-layout {
+        display: grid;
+        grid-template-columns:
+          minmax(10rem, 0.75fr) minmax(15rem, 1.35fr)
+          minmax(13rem, 1fr);
+        min-height: clamp(25rem, 52dvh, 39rem);
+      }
+      .tui-layout.search-layout {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .pane {
+        min-width: 0;
+        padding: 0.8rem;
+        border-right: 1px solid var(--terminal-rule);
+      }
+      .pane:last-child {
+        border-right: 0;
+      }
+      .pane-title {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.7rem;
+        color: var(--terminal-muted);
+        font-size: 0.74em;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .filter {
+        margin-bottom: 0.55rem;
+        padding: 0.38rem 0.5rem;
+        border: 1px solid var(--terminal-rule);
+        color: var(--terminal-ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .filter::before {
+        content: "/ ";
+        color: var(--terminal-accent);
+      }
+      .tui-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .tui-list li {
+        display: grid;
+        grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+        gap: 0.35rem;
+        min-height: 3.2rem;
+        margin-bottom: 0.25rem;
+        padding: 0.2rem 0.3rem;
+        border: 1px solid transparent;
+        color: var(--terminal-muted);
+      }
+      .tui-list li.selected {
+        border-color: var(--terminal-accent);
+        background: transparent;
+        color: var(--terminal-accent);
+      }
+      .tui-list .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tui-list .match-service {
+        display: block;
+        overflow: hidden;
+        color: inherit;
+        font-size: 0.72em;
+        opacity: 0.68;
+        text-overflow: ellipsis;
+      }
+      .tui-list .count {
+        opacity: 0.72;
+        font-size: 0.85em;
+      }
+      .page-choice {
+        display: grid;
+        grid-template-columns: 1.1rem minmax(0, 1fr) auto;
+        gap: 0.35rem;
+        width: 100%;
+        min-height: 1.7rem;
+        padding: 0.2rem 0.3rem;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--terminal-muted);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .page-choice.selected {
+        background: var(--terminal-accent);
+        color: var(--terminal);
+      }
+      .page-view,
+      .page-detail {
+        display: none;
+      }
+      .page-view.active,
+      .page-detail.active {
+        display: block;
+      }
+      .terminal-action {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--terminal-muted);
+        font: inherit;
+        cursor: pointer;
+      }
+      .terminal-action:hover {
+        color: var(--terminal-ink);
+      }
+      .terminal-action:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .terminal-action b {
+        color: var(--terminal-ink);
+        font-weight: 500;
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      .table th {
+        padding: 0.28rem 0.35rem;
+        border-bottom: 1px solid var(--terminal-rule);
+        color: var(--terminal-muted);
+        font-weight: 500;
+        text-align: left;
+      }
+      .table td {
+        max-width: 13rem;
+        padding: 0.34rem 0.35rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .table tr.selected td {
+        background: var(--terminal-accent);
+        color: var(--terminal);
+      }
+      .status-good {
+        color: oklch(77% 0.12 150);
+      }
+      .status-warn {
+        color: var(--terminal-accent);
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(6rem, 0.6fr) minmax(0, 1fr);
+        gap: 0.24rem 0.65rem;
+        margin: 0;
+      }
+      .detail-grid dt {
+        color: var(--terminal-muted);
+      }
+      .detail-grid dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      .json {
+        margin: 0.65rem 0 0;
+        padding: 0.65rem;
+        border: 1px solid var(--terminal-rule);
+        background: var(--terminal-panel);
+        color: var(--terminal-muted);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .json .key {
+        color: var(--terminal-blue);
+      }
+      .json .string {
+        color: var(--terminal-accent);
+      }
+      .json .selected-entry {
+        background: var(--terminal-accent);
+        color: var(--terminal);
+      }
+      .json .selected-entry .key,
+      .json .selected-entry .string {
+        color: var(--terminal);
+      }
+      .json .linked-arn {
+        text-decoration: underline;
+        text-underline-offset: 0.12em;
+      }
+      .hintbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 1rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid var(--terminal-rule);
+        color: var(--terminal-muted);
+      }
+      .hintbar b {
+        color: var(--terminal-ink);
+        font-weight: 500;
+      }
+      .debugline {
+        color: var(--terminal-warn);
+      }
+      .mock-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: var(--s4);
+      }
+      .mock-tabs button {
+        padding: 0.48rem 0.75rem;
+        border: 1px solid var(--line-strong);
+        border-radius: 0;
+        background: var(--paper-raised);
+        color: var(--ink);
+        cursor: pointer;
+        font: 700 0.76rem/1.2 var(--mono);
+        text-transform: uppercase;
+      }
+      .mock-tabs button[aria-selected="true"] {
+        border-color: var(--accent-dark);
+        background: var(--accent);
+        color: white;
+      }
+      .prototype-note {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: var(--s3);
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .command-sheet {
+        border: 1px solid var(--line-strong);
+        background: var(--paper-raised);
+      }
+      .command-row {
+        display: grid;
+        grid-template-columns: minmax(15rem, 0.85fr) minmax(0, 1fr);
+        gap: var(--s6);
+        padding: var(--s4) var(--s6);
+        border-bottom: 1px solid var(--line);
+      }
+      .command-row:last-child {
+        border-bottom: 0;
+      }
+      .command-row pre {
+        margin: 0;
+        color: var(--accent-dark);
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .command-row p {
+        margin: 0;
+      }
+
+      .pipeline {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(8rem, 1fr));
+        gap: 0;
+        overflow-x: auto;
+        border: 1px solid var(--line-strong);
+        background: var(--paper-raised);
+      }
+      .stage {
+        position: relative;
+        min-width: 9rem;
+        padding: var(--s6);
+        border-right: 1px solid var(--line-strong);
+      }
+      .stage:last-child {
+        border-right: 0;
+      }
+      .stage:not(:last-child)::after {
+        content: "→";
+        position: absolute;
+        z-index: 2;
+        top: 50%;
+        right: -0.62rem;
+        display: grid;
+        width: 1.2rem;
+        height: 1.7rem;
+        place-items: center;
+        background: var(--paper-raised);
+        color: var(--accent-dark);
+        font-weight: 800;
+      }
+      .stage b {
+        display: block;
+        margin-bottom: 0.55rem;
+        font: 800 0.82rem/1.3 var(--mono);
+        text-transform: uppercase;
+      }
+      .stage span {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .tree {
+        margin: var(--s6) 0 0;
+        padding: var(--s6);
+        border: 1px solid var(--line-strong);
+        background: var(--ink);
+        color: var(--terminal-ink);
+        font: 0.83rem/1.65 var(--mono);
+        white-space: pre-wrap;
+        overflow-x: auto;
+      }
+      .tree .hot {
+        color: var(--terminal-accent);
+      }
+      .tree .dim {
+        color: var(--terminal-muted);
+      }
+
+      .phases {
+        counter-reset: phase;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        border-top: 1px solid var(--line-strong);
+      }
+      .phase {
+        counter-increment: phase;
+        display: grid;
+        grid-template-columns: 3rem minmax(10rem, 0.45fr) minmax(0, 1fr);
+        gap: var(--s6);
+        padding: var(--s6) 0;
+        border-bottom: 1px solid var(--line-strong);
+      }
+      .phase::before {
+        content: counter(phase, decimal-leading-zero);
+        color: var(--accent-dark);
+        font: 800 1.2rem/1 var(--mono);
+      }
+      .phase h3 {
+        margin: 0;
+        font: 800 1.05rem/1.35 var(--mono);
+      }
+      .phase p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .phase .exit {
+        display: block;
+        margin-top: 0.5rem;
+        color: var(--ink);
+        font-size: 0.86rem;
+      }
+
+      .risk-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--paper-raised);
+      }
+      .risk-table th,
+      .risk-table td {
+        padding: 0.75rem 0.9rem;
+        border: 1px solid var(--line);
+        vertical-align: top;
+        text-align: left;
+      }
+      .risk-table th {
+        color: var(--muted);
+        font: 700 0.75rem/1.3 var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .risk-table td:first-child {
+        font-weight: 700;
+      }
+
+      .checklist {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        border: 1px solid var(--line-strong);
+        background: var(--line-strong);
+      }
+      .check {
+        display: flex;
+        gap: 0.8rem;
+        align-items: flex-start;
+        padding: var(--s4);
+        background: var(--paper-raised);
+        cursor: pointer;
+      }
+      .check input {
+        width: 1.1rem;
+        height: 1.1rem;
+        margin: 0.2rem 0 0;
+        accent-color: var(--accent-dark);
+      }
+      .check span {
+        line-height: 1.45;
+      }
+
+      .sources {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        border: 1px solid var(--line-strong);
+        background: var(--line-strong);
+      }
+      .source {
+        padding: var(--s6);
+        background: var(--paper-raised);
+      }
+      .source h3 {
+        margin: 0 0 0.5rem;
+        font: 800 1rem/1.3 var(--mono);
+      }
+      .source p {
+        margin: 0 0 0.7rem;
+        color: var(--muted);
+      }
+
+      footer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: var(--s6) clamp(1rem, 5vw, 5rem);
+        background: var(--ink);
+        color: var(--terminal-muted);
+        font: 0.76rem/1.5 var(--mono);
+      }
+
+      @media (max-width: 64rem) {
+        .masthead {
+          grid-template-columns: 1fr;
+        }
+        .mast-copy {
+          min-height: 68dvh;
+          border-right: 0;
+          border-bottom: 1px solid var(--line-strong);
+        }
+        .section {
+          grid-template-columns: 1fr;
+          gap: var(--s8);
+        }
+        .section-intro {
+          max-width: 58ch;
+        }
+        .tui-layout {
+          grid-template-columns: minmax(10rem, 0.7fr) minmax(16rem, 1.3fr);
+        }
+        .tui-layout .pane:last-child {
+          grid-column: 1 / -1;
+          border-top: 1px solid var(--terminal-rule);
+        }
+        .tui-layout .pane:nth-child(2) {
+          border-right: 0;
+        }
+      }
+
+      @media (max-width: 46rem) {
+        .wordmark {
+          font-size: clamp(3.3rem, 18vw, 6rem);
+        }
+        .manifest-row {
+          grid-template-columns: 5.5rem 1fr;
+        }
+        .decision,
+        .sources,
+        .checklist {
+          grid-template-columns: 1fr;
+        }
+        .command-row {
+          grid-template-columns: 1fr;
+          gap: 0.6rem;
+        }
+        .phase {
+          grid-template-columns: 2.4rem 1fr;
+          gap: var(--s3);
+        }
+        .phase p {
+          grid-column: 2;
+        }
+        .terminal-screen {
+          min-height: 38rem;
+          overflow: auto;
+        }
+        .tui-layout {
+          grid-template-columns: 1fr;
+        }
+        .tui-layout .pane {
+          border-right: 0;
+          border-bottom: 1px solid var(--terminal-rule);
+        }
+        .tui-layout .pane:last-child {
+          grid-column: auto;
+          border-bottom: 0;
+        }
+        .prototype-note {
+          flex-direction: column;
+        }
+        .risk-table {
+          display: block;
+          overflow-x: auto;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main" target="_self">Skip to plan</a>
+
+    <div class="shell">
+      <header class="masthead">
+        <div class="mast-copy">
+          <div>
+            <div class="issue-line">
+              <span>Design dossier 01</span>
+              <span>15 Sep 2026</span>
+              <span>TypeScript / Commander / Smithy</span>
+            </div>
+            <h1 class="wordmark">AWS<br /><span>TUI</span></h1>
+            <p class="lede">
+              A read-only terminal navigator for AWS. Launch it, type what you
+              want to find, choose <strong>List</strong> or
+              <strong>Get</strong>, and inspect the result without navigating
+              AWS service names or composing raw CLI syntax.
+            </p>
+          </div>
+          <p class="mast-note">
+            Audience: an engineer deciding whether the architecture is
+            buildable. Reference: industrial operator manual, not a product
+            landing page. The terminal below is interactive—switch screens to
+            test the information hierarchy.
+          </p>
+        </div>
+        <aside class="manifest" aria-label="Project manifest">
+          <h2>Build manifest</h2>
+          <dl>
+            <div class="manifest-row">
+              <dt>Binary</dt>
+              <dd>awstui</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>Mode</dt>
+              <dd>Read-only: List, Get, Describe</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>Shell</dt>
+              <dd>Commander.js</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>TUI</dt>
+              <dd>Ink + React</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>Models</dt>
+              <dd>aws/api-models-aws JSON AST</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>Executor</dt>
+              <dd>AWS CLI v2 child process</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>Credentials</dt>
+              <dd>Existing AWS profile chain</dd>
+            </div>
+            <div class="manifest-row">
+              <dt>Default</dt>
+              <dd>No args opens global search</dd>
+            </div>
+          </dl>
+          <div class="launch">$ awstui</div>
+        </aside>
+      </header>
+
+      <nav class="rail" aria-label="Plan sections">
+        <a href="#scope" target="_self">Scope</a>
+        <a href="#prototype" target="_self">Prototype</a>
+        <a href="#commands" target="_self">Commands</a>
+        <a href="#architecture" target="_self">Architecture</a>
+        <a href="#delivery" target="_self">Delivery</a>
+        <a href="#risks" target="_self">Risks</a>
+        <a href="#acceptance" target="_self">Acceptance</a>
+        <a href="#sources" target="_self">Sources</a>
+      </nav>
+
+      <main id="main">
+        <section class="section" id="scope">
+          <header>
+            <h2>Build the safe half first</h2>
+            <p class="section-intro">
+              The first release is intentionally narrow: discovery and read
+              operations across AWS, with the same “run bare for a guided
+              terminal experience” pattern used by AgentCore CLI.
+            </p>
+          </header>
+          <div class="section-body">
+            <div class="decision">
+              <div>
+                <h3>Release 0.1</h3>
+                <p>
+                  The catalog includes public service models and exposes
+                  zero-required-input <code>List*</code> operations plus
+                  <code>Get*</code> and <code>Describe*</code>. Selecting List
+                  runs immediately. Smithy pagination traits drive one page view
+                  at a time, while continuation tokens remain internal.
+                </p>
+                <ul>
+                  <li>
+                    Use one fuzzy, typo-tolerant no-space search token across
+                    normalized resource, action, and operation names.
+                  </li>
+                  <li>
+                    Normalize both sides to lowercase ASCII letters and digits:
+                    <code>ListAgentRuntimes</code> →
+                    <code>listagentruntimes</code>.
+                  </li>
+                  <li>
+                    Keep AWS service IDs as hidden routing metadata rather than
+                    a navigation level.
+                  </li>
+                  <li>
+                    Open List with no parameter screen and move through API
+                    pages with Next/Previous.
+                  </li>
+                  <li>
+                    Generate input forms only for standalone Get/Describe
+                    operations that need identifiers.
+                  </li>
+                  <li>
+                    Fuzzy-filter only the rows already loaded on the current API
+                    page.
+                  </li>
+                  <li>
+                    Render Get results as syntax-colored, pretty-printed JSON
+                    with selectable ARN values.
+                  </li>
+                  <li>
+                    Respect profile, region, endpoint, retry, and credential
+                    behavior from AWS CLI v2.
+                  </li>
+                  <li>
+                    Resolve ARN links from the current public Smithy models on
+                    GitHub and open the target resource when unambiguous.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h3>Explicit boundary</h3>
+                <p>
+                  No create, update, delete, invoke, streaming, waiter,
+                  interactive auth, server-side List parameters, or “fetch all”
+                  mode in 0.1. List operations with required inputs are
+                  excluded. Unknown output shapes always fall back to pretty
+                  JSON.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="prototype">
+          <header>
+            <h2>Terminal prototype</h2>
+            <p class="section-intro">
+              The opening view is one global filter in a fixed terminal
+              skeleton. Search slots and the selected-API panel keep their
+              dimensions while content changes; only the cyan focus box moves.
+            </p>
+          </header>
+          <div class="section-body">
+            <div
+              class="mock-tabs"
+              role="tablist"
+              aria-label="TUI mockup screens"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="screen-browse"
+                id="tab-browse"
+                data-screen="browse"
+              >
+                Search
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="screen-input"
+                id="tab-input"
+                data-screen="input"
+              >
+                Paged list
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="screen-detail"
+                id="tab-detail"
+                data-screen="detail"
+              >
+                Resource detail
+              </button>
+            </div>
+
+            <div class="terminal-wrap">
+              <div class="terminal-chrome">
+                <div class="lights" aria-hidden="true">
+                  <span class="light"></span><span class="light"></span
+                  ><span class="light"></span>
+                </div>
+                <div class="terminal-title">
+                  awstui — dev-sandbox — us-west-2
+                </div>
+                <div>118 × 39</div>
+              </div>
+
+              <div class="terminal-screen">
+                <div
+                  class="screen active"
+                  id="screen-browse"
+                  role="tabpanel"
+                  aria-labelledby="tab-browse"
+                >
+                  <div class="tui-header">
+                    <span class="tui-brand">AWS TUI / GLOBAL SEARCH</span>
+                    <span class="context"
+                      >profile dev-sandbox · region us-west-2 · model
+                      2026-09-15</span
+                    >
+                  </div>
+                  <div class="filter">resource:agentruntime</div>
+                  <section class="pane" aria-label="Global action search">
+                    <table class="table">
+                      <thead>
+                        <tr>
+                          <th>API</th>
+                          <th>Mode</th>
+                          <th>Service</th>
+                          <th>Resource</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="selected">
+                          <td>› List agent runtimes</td>
+                          <td>LIST</td>
+                          <td>Amazon Bedrock AgentCore Control</td>
+                          <td>Agent</td>
+                        </tr>
+                        <tr>
+                          <td>Get agent runtime</td>
+                          <td>GET</td>
+                          <td>Amazon Bedrock AgentCore Control</td>
+                          <td>Agent</td>
+                        </tr>
+                        <tr>
+                          <td>List agent runtime endpoints</td>
+                          <td>LIST</td>
+                          <td>Amazon Bedrock AgentCore Control</td>
+                          <td>Agent Runtime Endpoint</td>
+                        </tr>
+                        <tr>
+                          <td>Get agent runtime endpoint</td>
+                          <td>GET</td>
+                          <td>Amazon Bedrock AgentCore Control</td>
+                          <td>Agent Runtime Endpoint</td>
+                        </tr>
+                        <tr>
+                          <td>&nbsp;</td>
+                          <td></td>
+                          <td></td>
+                          <td></td>
+                        </tr>
+                        <tr>
+                          <td>&nbsp;</td>
+                          <td></td>
+                          <td></td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <pre class="json">
+ListAgentRuntimes · No required inputs · Page by page
+4 matches · 1 selected</pre>
+                  </section>
+                  <div class="hintbar">
+                    <span><b>↑/↓</b> move</span
+                    ><span><b>↵</b> run selected</span
+                    ><span><b>service:x</b> scope</span
+                    ><span><b>resource:x</b> scope</span
+                    ><span><b>esc</b> clear/back</span
+                    ><span><b>ctrl+q</b> quit</span>
+                  </div>
+                  <div class="hintbar debugline">
+                    DEBUG · aws bedrock-agentcore-control list-agent-runtimes
+                    --profile dev-sandbox --region us-west-2 …
+                  </div>
+                </div>
+
+                <div
+                  class="screen"
+                  id="screen-input"
+                  role="tabpanel"
+                  aria-labelledby="tab-input"
+                >
+                  <div class="tui-header">
+                    <span class="tui-brand" id="list-page-title"
+                      >AWS TUI / AGENT RUNTIMES · PAGE 1</span
+                    >
+                    <span class="context" id="list-page-context"
+                      >Amazon Bedrock AgentCore Control · 184 ms</span
+                    >
+                  </div>
+                  <div class="filter">research</div>
+                  <section class="pane">
+                    <div class="pane-title">
+                      <span>ListAgentRuntimes</span
+                      ><span id="table-page-label">1 / 3 rows</span>
+                    </div>
+                    <div class="page-view active" data-page-view="1">
+                      <table class="table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th>Runtime ID</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr class="selected">
+                            <td>research-agent</td>
+                            <td>READY</td>
+                            <td>21:08Z</td>
+                            <td>research-agent-x7p3L9Q2</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                  <div class="hintbar">
+                    <span
+                      >ListAgentRuntimes · Page 1 · 1/3 rows · Next page
+                      available</span
+                    >
+                  </div>
+                  <div class="hintbar">
+                    <span><b>/</b> filter page</span><span><b>↑/↓</b> move</span
+                    ><span><b>↵</b> inspect</span
+                    ><button
+                      type="button"
+                      class="terminal-action"
+                      id="previous-page"
+                      disabled
+                    >
+                      <b>b</b> previous</button
+                    ><button
+                      type="button"
+                      class="terminal-action"
+                      id="next-page"
+                    >
+                      <b>n</b> next</button
+                    ><span><b>esc</b> clear</span>
+                  </div>
+                </div>
+
+                <div
+                  class="screen"
+                  id="screen-detail"
+                  role="tabpanel"
+                  aria-labelledby="tab-detail"
+                >
+                  <div class="tui-header">
+                    <span class="tui-brand">AWS TUI / RESOURCE DETAIL</span>
+                    <span class="context"
+                      >Amazon Bedrock AgentCore Control · GetAgentRuntime</span
+                    >
+                  </div>
+                  <section class="pane">
+                    <div class="pane-title">
+                      <span>Pretty JSON</span><span>Entry 5 / 8</span>
+                    </div>
+                    <pre class="json">{
+  <span class="key">"agentRuntimeName"</span>: <span class="string">"research-agent"</span>,
+  <span class="key">"agentRuntimeId"</span>: <span class="string">"research-agent-x7p3L9Q2"</span>,
+  <span class="key">"status"</span>: <span class="string">"READY"</span>,
+  <span class="key">"agentRuntimeArn"</span>: <span class="string linked-arn">"arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/research-agent-x7p3L9Q2"</span>,
+<span class="selected-entry">  <span class="key">"roleArn"</span>: <span class="string linked-arn">"arn:aws:iam::123456789012:role/service-role/ResearchAgentRole"</span>,</span>
+  <span class="key">"networkConfiguration"</span>: {
+    <span class="key">"networkMode"</span>: <span class="string">"PUBLIC"</span>
+  },
+  <span class="key">"updatedAt"</span>: <span class="string">"2026-09-14T21:08:41Z"</span>
+}</pre>
+                  </section>
+                  <div class="hintbar">
+                    <span>Lines 1–12 of 12 · Entry 5/8 · Enter open ARN</span>
+                  </div>
+                  <div class="hintbar">
+                    <span><b>↑/↓ · j/k</b> move entry</span
+                    ><span><b>↵</b> open linked resource</span
+                    ><span><b>pgup/pgdn</b> jump</span
+                    ><span><b>esc</b> back</span><span><b>ctrl+q</b> quit</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="prototype-note">
+              <span
+                >Mockup behavior: tabs change the proposed screen state; no AWS
+                calls are made.</span
+              >
+              <span
+                >Search: 2 panes · paged results: 3 panes · runtime views cap
+                visible rows and trim optional detail text to fit the terminal
+                height.</span
+              >
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="commands">
+          <header>
+            <h2>One core, two interfaces</h2>
+            <p class="section-intro">
+              Commander remains a thin adapter. The TUI and headless commands
+              invoke the same catalog, validation, execution, and rendering
+              classes.
+            </p>
+          </header>
+          <div class="section-body">
+            <div class="command-sheet">
+              <div class="command-row">
+                <pre>awstui</pre>
+                <p>
+                  Launch the guided terminal UI. This mirrors AgentCore CLI’s
+                  no-argument terminal entry pattern.
+                </p>
+              </div>
+              <div class="command-row">
+                <pre>awstui list [search]</pre>
+                <p>
+                  Open the global search restricted to zero-required-input
+                  <code>List*</code> actions. Search is one fuzzy token with no
+                  spaces, such as <code>agentruntime</code>,
+                  <code>agentruntmie</code>, or <code>listagentruntimes</code>.
+                  Exact normalized matches rank first; a unique match runs
+                  immediately and multiple matches open the picker.
+                </p>
+              </div>
+              <div class="command-row">
+                <pre>awstui get [search]</pre>
+                <p>
+                  Open the same fuzzy no-space search restricted to
+                  <code>Get*</code> and <code>Describe*</code>. After selection,
+                  the generated input view asks only for identifiers required by
+                  that action.
+                </p>
+              </div>
+              <div class="command-row">
+                <pre>
+awstui models update
+awstui models doctor</pre>
+                <p>
+                  Refresh the pinned public model snapshot and report
+                  unsupported traits or naming collisions. Update is explicit;
+                  normal browsing never requires network access.
+                </p>
+              </div>
+              <div class="command-row">
+                <pre>
+global:
+--profile --region --endpoint-url
+--output --query --no-color --debug</pre>
+                <p>
+                  Keep session flags consistent across the root command, TUI,
+                  <code>list</code>, and <code>get</code>. Avoid
+                  operation-specific global behavior.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="architecture">
+          <header>
+            <h2>Smithy supplies the map</h2>
+            <p class="section-intro">
+              The packaged public-model catalog drives discovery and forms. ARN
+              drill-through checks the current public models on GitHub at
+              runtime. AWS CLI v2 performs signing, credential resolution,
+              protocol serialization, retries, and endpoint behavior.
+            </p>
+          </header>
+          <div class="section-body">
+            <div class="pipeline" aria-label="Build and runtime data flow">
+              <div class="stage">
+                <b>GitHub model</b
+                ><span>Public JSON AST under service/version directories.</span>
+              </div>
+              <div class="stage">
+                <b>Normalizer</b
+                ><span
+                  >Resolve service, operation, structure, enum, docs, and
+                  pagination traits.</span
+                >
+              </div>
+              <div class="stage">
+                <b>Search index</b
+                ><span
+                  >Friendly action text plus hidden operation and service
+                  routing metadata.</span
+                >
+              </div>
+              <div class="stage">
+                <b>Commander / Ink</b
+                ><span
+                  >Validate input and present the same operation model in two
+                  interfaces.</span
+                >
+              </div>
+              <div class="stage">
+                <b>Live ARN resolver</b
+                ><span
+                  >Conditionally fetch source and target Smithy models, then
+                  follow ARN reference → resource → read operation.</span
+                >
+              </div>
+              <div class="stage">
+                <b>AWS CLI v2</b
+                ><span
+                  >Execute JSON command and stream structured output back to the
+                  renderer.</span
+                >
+              </div>
+            </div>
+
+            <pre
+              class="tree"
+              aria-label="Proposed source tree"
+            ><span class="hot">src/</span>
+├── index.ts                         <span class="dim"># binary entry</span>
+├── cli/
+│   ├── cli.ts                       <span class="dim"># Commander composition only</span>
+│   ├── commands/
+│   │   ├── list/index.ts
+│   │   ├── get/index.ts
+│   │   └── models/{index,update,doctor}.ts
+│   └── options/aws-context.ts       <span class="dim"># shared global options</span>
+├── tui/
+│   ├── app.tsx
+│   ├── screens/{SearchScreen,PageScreen,InputScreen,DetailScreen}.tsx
+│   └── components/{Frame,TableView,JsonView}.tsx
+├── model/
+│   ├── catalog.ts                   <span class="dim"># cohesive generated catalog abstraction</span>
+│   ├── github-smithy.ts             <span class="dim"># live ETag fetch + ARN reference resolver</span>
+│   ├── types.ts
+│   └── generated/catalog.json
+├── search/fuzzy.ts                  <span class="dim"># exact, edit-distance, and subsequence ranking</span>
+├── execution/
+│   ├── aws-cli-executor.ts
+│   ├── command-builder.ts
+│   └── types.ts
+└── rendering/
+    └── projector.ts</pre>
+
+            <div class="decision" style="margin-top: 1.5rem">
+              <div>
+                <h3>Key abstractions</h3>
+                <p>
+                  Use TypeScript type aliases for generated/data-only shapes
+                  such as <code>OperationEntry</code>,
+                  <code>ServiceEntry</code>, and <code>InputField</code>. Each
+                  search entry carries friendly text for the user and hidden
+                  backend routing. Cohesive stateful behavior lives in
+                  <code>SmithyCatalog</code>,
+                  <code>GithubSmithyRepository</code>,
+                  <code>ArnReferenceResolver</code>, and
+                  <code>AwsCliExecutor</code>.
+                </p>
+              </div>
+              <div>
+                <h3>ARN resolution boundary</h3>
+                <p>
+                  The resolver only executes when a user activates an ARN. It
+                  refreshes the source and target model paths from GitHub with
+                  <code>If-None-Match</code>, prefers an explicit
+                  <code>aws.api#arnReference</code> and Smithy resource
+                  <code>read</code> operation, then falls back to an exact
+                  Get/Describe match only when the mapping is unambiguous.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="delivery">
+          <header>
+            <h2>Four build slices</h2>
+            <p class="section-intro">
+              Each slice exits with something runnable. The catalog and executor
+              prove the difficult parts before terminal polish expands.
+            </p>
+          </header>
+          <div class="section-body">
+            <ol class="phases">
+              <li class="phase">
+                <h3>Catalog compiler</h3>
+                <p>
+                  Pin a commit from <code>aws/api-models-aws</code>; resolve
+                  JSON AST references; classify List/Get/Describe; emit a
+                  compact deterministic manifest and diagnostics.<span
+                    class="exit"
+                    >Exit: snapshot tests cover S3, DynamoDB, STS, and both
+                    AgentCore services; repeated generation produces identical
+                    bytes.</span
+                  >
+                </p>
+              </li>
+              <li class="phase">
+                <h3>Headless commands</h3>
+                <p>
+                  Build Commander registration, fuzzy no-space action search,
+                  shared AWS options, shape-aware Get input parsing, safe child
+                  process execution, single-page List execution, JSON output,
+                  and error mapping.<span class="exit"
+                    >Exit: both <code>awstui list agentruntime</code> and typo
+                    <code>awstui list agentruntmie</code> resolve without
+                    service/API parameters; ambiguous tokens open the
+                    picker.</span
+                  >
+                </p>
+              </li>
+              <li class="phase">
+                <h3>Terminal browser</h3>
+                <p>
+                  Add Ink screens, global and current-page fuzzy filtering,
+                  keyboard navigation, one-view-per-page List navigation,
+                  generated Get input editor, result table projection, pretty
+                  JSON detail, ARN selection, and resize handling.<span
+                    class="exit"
+                    >Exit: Next loads one API page, Previous returns to the
+                    cached prior page, and the workflow works at 80×24 and
+                    140×45.</span
+                  >
+                </p>
+              </li>
+              <li class="phase">
+                <h3>Hardening and release</h3>
+                <p>
+                  Add redaction, cancellation, timeouts, model doctor, packaged
+                  catalog, update policy, telemetry decision, CI across Node
+                  20/22, and npm packaging.<span class="exit"
+                    >Exit: install globally, launch with no args, and complete
+                    the acceptance checklist below.</span
+                  >
+                </p>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="section" id="risks">
+          <header>
+            <h2>Hard parts worth naming</h2>
+            <p class="section-intro">
+              The difficult work is model interpretation and generic output
+              projection, not drawing panes.
+            </p>
+          </header>
+          <div class="section-body">
+            <table class="risk-table">
+              <thead>
+                <tr>
+                  <th>Risk</th>
+                  <th>Plan</th>
+                  <th>Proof</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A service model changes daily</td>
+                  <td>
+                    Pin the search catalog for deterministic packaging, but
+                    conditionally fetch current source/target model files
+                    whenever an ARN is opened.
+                  </td>
+                  <td>
+                    Tests prove every load reaches GitHub and unchanged files
+                    reuse the cached ETag response.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A search token can contain typos or match multiple actions
+                  </td>
+                  <td>
+                    Strip spaces, hyphens, underscores, and case from indexed
+                    names. Rank exact, prefix, and substring matches first,
+                    followed by bounded edit-distance and ordered-subsequence
+                    matches. Ambiguous results stay in the picker.
+                  </td>
+                  <td>
+                    Golden ranking cases cover exact <code>agentruntime</code>,
+                    typo <code>agentruntmie</code>, abbreviation
+                    <code>agntrntm</code>, and unrelated-token rejection.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Hidden backend routing must be deterministic</td>
+                  <td>
+                    Each generated search entry stores one canonical operation
+                    ID and AWS CLI command separately from its public Smithy
+                    model directory. For example, the model path is
+                    <code>dynamodb-streams</code>, while execution uses
+                    <code>aws dynamodbstreams</code>. Service names never need
+                    user selection.
+                  </td>
+                  <td>
+                    Doctor checks every route against <code>aws help</code> when
+                    AWS CLI is available.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Generic list output has no obvious columns</td>
+                  <td>
+                    Score scalar members: identifiers/names first, then
+                    status/type/time; cap width and retain JSON fallback.
+                  </td>
+                  <td>
+                    Golden projections across at least 20 structurally different
+                    services.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Some List operations require scope inputs</td>
+                  <td>
+                    Exclude them from 0.1 rather than adding a List parameter
+                    form. Report the reason in model doctor output.
+                  </td>
+                  <td>
+                    The catalog marks every omitted List operation and its
+                    required members.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Get inputs include nested unions and blobs</td>
+                  <td>
+                    0.1 supports scalar, enum, list-of-scalar, and simple
+                    structures; complex fields accept JSON with model-aware
+                    validation.
+                  </td>
+                  <td>
+                    Unsupported editor modes are visible before execution and
+                    accept pasted JSON.
+                  </td>
+                </tr>
+                <tr>
+                  <td>An ARN can map to multiple resources or reads</td>
+                  <td>
+                    Prefer explicit Smithy service/resource references, resource
+                    ARN templates, and resource identifiers. Refuse tied top
+                    candidates instead of guessing.
+                  </td>
+                  <td>
+                    Resolver tests cover explicit cross-service resource reads,
+                    IAM fallback, ARN capture, and ambiguous-result rejection.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Secrets leak through history or logs</td>
+                  <td>
+                    Never invoke a shell; pass argv directly; mark sensitive
+                    Smithy members; redact command previews, debug logs, and
+                    errors.
+                  </td>
+                  <td>
+                    Tests assert sensitive values never appear in snapshots or
+                    thrown errors.
+                  </td>
+                </tr>
+                <tr>
+                  <td>AgentCore may lead AWS CLI availability</td>
+                  <td>
+                    Report “model known, executor unavailable” clearly. Keep the
+                    executor contract ready for a generated AWS SDK pack.
+                  </td>
+                  <td>
+                    Doctor distinguishes missing operation from auth, region,
+                    and service errors.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="acceptance">
+          <header>
+            <h2>Definition of useful</h2>
+            <p class="section-intro">
+              These checks define the first release. In Artifactory, the
+              checkboxes persist so the plan can double as a review sheet.
+            </p>
+          </header>
+          <div class="section-body">
+            <div class="checklist">
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-launch"
+                /><span
+                  ><code>awstui</code> opens the TUI; <code>--help</code> stays
+                  standard Commander output.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-catalog"
+                /><span
+                  >The packaged catalog records its source repo, commit SHA,
+                  generation date, and service versions.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-agentcore"
+                /><span
+                  >Searching <code>agentruntime</code> returns friendly List/Get
+                  actions without spaces or a service picker.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-stable-search"
+                /><span
+                  >Typing and moving selection never reflows the search screen;
+                  the flat API/mode/service table keeps fixed row slots and a
+                  compact selected-operation summary.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-scoped-search"
+                /><span
+                  ><code>service:</code> and <code>resource:</code> perform
+                  fuzzy scoped searches, and every result displays its Smithy
+                  resource or inferred fallback in a Resource column.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-fixed-table"
+                /><span
+                  >Search and List table viewports fill the available terminal
+                  height with blank slots; exactly three bottom rows remain for
+                  status, help, and hidden debug output.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-debug"
+                /><span
+                  >Undocumented <code>Ctrl+G</code> toggles the current redacted
+                  AWS CLI command beneath the normal help hints.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-input"
+                /><span
+                  >List exposes no API parameters; required Get inputs block
+                  execution and show constraints inline.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-pages"
+                /><span
+                  >Each List API page has its own view; Next loads one page and
+                  Previous returns to a cached page.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-scalar-detail"
+                /><span
+                  >A scalar List row opens a related Get/Describe operation when
+                  it can safely populate exactly one compatible required input,
+                  including <code>ListTables → DescribeTable</code>.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-page-filter"
+                /><span
+                  ><code>/</code> fuzzy-filters only the rows already loaded on
+                  the current API page.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-detail"
+                /><span
+                  >Resource detail is pretty JSON with the AWS service and
+                  operation visible in the header. Every JSON entry can receive
+                  keyboard focus with Up/Down or J/K, and the viewport follows
+                  the focused entry.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-arn"
+                /><span
+                  >Only ARN values verified through current GitHub Smithy models
+                  are highlighted and selectable; nested values without a direct
+                  read, such as DynamoDB <code>IndexArn</code>, remain ordinary
+                  JSON.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-errors"
+                /><span
+                  >Auth, region, throttling, missing CLI, malformed input, and
+                  unsupported operation errors have distinct remediation.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-terminal"
+                /><span
+                  >The UI works at 80×24, handles resize, supports keyboard-only
+                  use, and respects <code>NO_COLOR</code>.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-security"
+                /><span
+                  >No sensitive Smithy member or credential value enters logs,
+                  command previews, or telemetry.</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  data-artifactory-state-key="accept-release"
+                /><span
+                  >Node 20/22 CI passes and the packed npm tarball installs and
+                  runs in a clean directory.</span
+                ></label
+              >
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="sources">
+          <header>
+            <h2>Source material</h2>
+            <p class="section-intro">
+              Public references only. The plan intentionally contains no
+              internal implementation details.
+            </p>
+          </header>
+          <div class="section-body">
+            <div class="sources">
+              <article class="source">
+                <h3>aws/agentcore-cli</h3>
+                <p>
+                  Reference for the no-argument terminal UI, TypeScript package
+                  layout, thin Commander command registration, and Ink/React
+                  screen organization.
+                </p>
+                <a href="https://github.com/aws/agentcore-cli"
+                  >Open public repository</a
+                >
+              </article>
+              <article class="source">
+                <h3>aws/api-models-aws</h3>
+                <p>
+                  Daily public AWS Smithy service models in JSON AST form.
+                  Service directories use normalized SDK IDs and contain
+                  versioned model files.
+                </p>
+                <a href="https://github.com/aws/api-models-aws"
+                  >Open public repository</a
+                >
+              </article>
+              <article class="source">
+                <h3>Smithy specification</h3>
+                <p>
+                  Shape, trait, resource, operation, identifier, pagination,
+                  documentation, and sensitivity semantics used by the catalog
+                  compiler.
+                </p>
+                <a href="https://smithy.io/2.0/spec/"
+                  >Open Smithy 2.0 specification</a
+                >
+              </article>
+              <article class="source">
+                <h3>Commander.js</h3>
+                <p>
+                  Root command, nested subcommands, shared options, help,
+                  parsing, and async action handling for the scriptable
+                  interface.
+                </p>
+                <a href="https://github.com/tj/commander.js"
+                  >Open public repository</a
+                >
+              </article>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>aws-tui design dossier · prepared 2026-09-15 UTC</span>
+        <span>Self-contained HTML · no external scripts, fonts, or images</span>
+      </footer>
+    </div>
+
+    <script>
+      (() => {
+        const tabs = Array.from(document.querySelectorAll("[data-screen]"));
+        const screens = Array.from(document.querySelectorAll(".screen"));
+
+        function selectTab(tab) {
+          const target = tab.dataset.screen;
+          tabs.forEach((item) =>
+            item.setAttribute("aria-selected", String(item === tab)),
+          );
+          screens.forEach((screen) =>
+            screen.classList.toggle("active", screen.id === `screen-${target}`),
+          );
+        }
+
+        tabs.forEach((tab, index) => {
+          tab.addEventListener("click", () => selectTab(tab));
+          tab.addEventListener("keydown", (event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              return;
+            event.preventDefault();
+            let next = index;
+            if (event.key === "ArrowLeft")
+              next = (index - 1 + tabs.length) % tabs.length;
+            if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+            if (event.key === "Home") next = 0;
+            if (event.key === "End") next = tabs.length - 1;
+            tabs[next].focus();
+            selectTab(tabs[next]);
+          });
+        });
+
+        const pageChoices = Array.from(
+          document.querySelectorAll("[data-page-choice]"),
+        );
+        const pageViews = Array.from(
+          document.querySelectorAll("[data-page-view]"),
+        );
+        const pageDetails = Array.from(
+          document.querySelectorAll("[data-page-detail]"),
+        );
+        const previousPage = document.querySelector("#previous-page");
+        const nextPage = document.querySelector("#next-page");
+        const pageTitle = document.querySelector("#list-page-title");
+        const pageContext = document.querySelector("#list-page-context");
+        const tablePageLabel = document.querySelector("#table-page-label");
+        const cachedPageCount = document.querySelector("#cached-page-count");
+        let currentPage = 1;
+        let highestCachedPage = 1;
+
+        function showPage(page) {
+          currentPage = Math.max(1, Math.min(2, page));
+          highestCachedPage = Math.max(highestCachedPage, currentPage);
+          pageChoices.forEach((choice) => {
+            const active = Number(choice.dataset.pageChoice) === currentPage;
+            choice.classList.toggle("selected", active);
+            choice.firstElementChild.textContent = active ? "›" : " ";
+          });
+          pageViews.forEach((view) =>
+            view.classList.toggle(
+              "active",
+              Number(view.dataset.pageView) === currentPage,
+            ),
+          );
+          pageDetails.forEach((detail) =>
+            detail.classList.toggle(
+              "active",
+              Number(detail.dataset.pageDetail) === currentPage,
+            ),
+          );
+          pageTitle.textContent = `AGENT RUNTIMES / PAGE ${currentPage}`;
+          tablePageLabel.textContent = `Page ${currentPage}`;
+          cachedPageCount.textContent = `${highestCachedPage} cached`;
+          pageContext.textContent =
+            currentPage === 1
+              ? "3 rows · fetched 184 ms · next page available"
+              : "3 rows · fetched 171 ms · final page";
+          previousPage.disabled = currentPage === 1;
+          nextPage.disabled = currentPage === 2;
+        }
+
+        pageChoices.forEach((choice) => {
+          choice.addEventListener("click", () =>
+            showPage(Number(choice.dataset.pageChoice)),
+          );
+        });
+        previousPage.addEventListener("click", () => showPage(currentPage - 1));
+        nextPage.addEventListener("click", () => showPage(currentPage + 1));
+
+        document.addEventListener("keydown", (event) => {
+          const pagedScreenActive = document
+            .querySelector("#screen-input")
+            .classList.contains("active");
+          if (!pagedScreenActive || event.target.matches("button")) return;
+          if (event.key.toLowerCase() === "n") showPage(currentPage + 1);
+          if (event.key.toLowerCase() === "b") showPage(currentPage - 1);
+        });
+      })();
+    </script>
+  </body>
+</html>

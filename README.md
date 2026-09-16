@@ -10,7 +10,7 @@ navigation level; the resolved service appears on operation and resource detail 
 ## Demo
 
 <a href="docs/assets/awstui-demo.mp4">
-  <img src="docs/assets/awstui-demo.gif" alt="Animated awstui walkthrough: fuzzy API search, ListTables results, and focused JSON resource detail" width="1104">
+  <img src="docs/assets/awstui-demo.gif" alt="Animated awstui walkthrough: ListAgentRuntimes search, GetAgentRuntime detail, and roleArn drill-through to IAM GetRole" width="1104">
 </a>
 
 Click the animation to open the MP4. The screenshots and recording were

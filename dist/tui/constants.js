@@ -1,8 +1,13 @@
 export const HELP = {
-    search: "service:x · resource:x · ↑/↓ Move · Enter Run · Esc Clear · Ctrl+Q Quit",
-    pages: "/ fuzzy filter page · ↑/↓ rows · Enter detail/get · N next · B previous · Esc clear/back",
-    detail: "↑/↓ or J/K move entry · Enter open linked ARN · PgUp/PgDn jump · Esc back · Ctrl+Q quit",
-    input: "Type value · Enter continue/run · Esc search · Ctrl+Q quit",
+    search: "service:x · resource:x · ↑/↓ Move · ←/→ Page · Enter Open · Esc Clear/Exit",
+    pages: "/ Filter · ↑/↓ Move · ←/→ Page · Enter Open · Esc Clear/Back",
+    configurablePages: "/ Filter · ↑/↓ Move · ←/→ Page · Enter Open · E Inputs · Esc Clear/Back",
+    detail: "/ Filter · ↑/↓ Move · ←/→ Page · Enter Open · R Related · Esc Clear/Back",
+    related: "/ Filter · ↑/↓ Move · ←/→ Page · Enter Open · Esc Clear/Back",
+    input: "Type value · Enter Continue · Esc Back",
+    enumInput: "/ Filter · ↑/↓ Move · ←/→ Page · Enter Select · Esc Clear/Back",
+    configureInput: "Type value · Enter Continue/Run · Esc Back",
+    configureEnum: "/ Filter · ↑/↓ Move · ←/→ Page · Enter Select/Run · Esc Clear/Back",
 };
 export const COLORS = {
     accent: "cyan",

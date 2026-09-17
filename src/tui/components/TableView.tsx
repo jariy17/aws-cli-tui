@@ -11,12 +11,21 @@ export function TableView({
   rows,
   selectedIndex,
   visibleRowCount,
+  emptyMessage = "No resources returned.",
 }: {
   rows: unknown[];
   selectedIndex: number;
   visibleRowCount: number;
+  emptyMessage?: string;
 }) {
   const { stdout } = useStdout();
+  if (rows.length === 0) {
+    return (
+      <Box height={visibleRowCount + 1} paddingLeft={2}>
+        <Text dimColor>{emptyMessage}</Text>
+      </Box>
+    );
+  }
   const terminalWidth = stdout?.columns ?? 100;
   const table = projectTable(rows, terminalWidth < 90 ? 3 : 5);
   const contentWidth = Math.max(30, terminalWidth - 8);

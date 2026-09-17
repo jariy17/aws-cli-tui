@@ -9,11 +9,18 @@ import {
 import { HELP } from "../constants.js";
 import type { ArnOccurrence } from "../../model/github-smithy.js";
 import type { OperationEntry } from "../../model/types.js";
+import {
+  formatOperationContext,
+  formatResourcePath,
+  rootResourcePath,
+  type ResourcePath,
+} from "../resource-route.js";
 
 export type DetailState = {
   entry: OperationEntry;
   value: unknown;
   source: "list row" | "get response";
+  input?: Record<string, unknown>;
 };
 
 export function DetailScreen({
@@ -21,11 +28,17 @@ export function DetailScreen({
   onBack,
   onCheckArn,
   onOpenArn,
+  relatedCount = 0,
+  onRelated,
+  resourcePath,
 }: {
   detail: DetailState;
   onBack: () => void;
   onCheckArn: (occurrence: ArnOccurrence) => Promise<boolean>;
   onOpenArn: (occurrence: ArnOccurrence) => void;
+  relatedCount?: number;
+  onRelated?: () => void;
+  resourcePath?: ResourcePath;
 }) {
   const occurrences = useMemo(
     () => findArnOccurrences(detail.value),
@@ -63,8 +76,11 @@ export function DetailScreen({
 
   return (
     <Frame
-      title="RESOURCE DETAIL"
-      metadata={`${detail.entry.serviceTitle} · ${detail.entry.operationName}`}
+      title={formatResourcePath(resourcePath ?? rootResourcePath(detail.entry))}
+      metadata={`${detail.entry.serviceTitle} · ${
+        detail.source === "get response" ? "Full resource" : "List entry"
+      }`}
+      context={formatOperationContext(detail.entry, detail.input ?? {})}
       help={HELP.detail}
     >
       <JsonView
@@ -72,6 +88,8 @@ export function DetailScreen({
         resolvableArns={resolvableArns}
         checkingArns={checkingArns}
         onOpenArn={onOpenArn}
+        relatedCount={relatedCount}
+        {...(onRelated ? { onRelated } : {})}
         onBack={onBack}
       />
     </Frame>

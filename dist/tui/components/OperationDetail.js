@@ -10,6 +10,10 @@ export function OperationDetail({ entry, }) {
         .filter((field) => field.required)
         .map((field) => field.name)
         .join(", ") || "None";
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, wrap: "truncate-end", ...(entry ? { color: COLORS.action } : {}), children: entry?.displayName ?? "Selected API" }), _jsx(Text, { children: " " }), _jsx(Field, { label: "Service", value: entry?.serviceTitle ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "Service command", value: entry?.serviceCliName ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "API operation", value: entry?.operationName ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "Mode", value: entry?.mode.toUpperCase() ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "Required inputs", value: entry ? requiredInputs : "—", labelWidth: labelWidth }), _jsx(Field, { label: "Pagination", value: entry ? (entry.pagination ? "Page by page" : "Single response") : "—", labelWidth: labelWidth })] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, wrap: "truncate-end", ...(entry ? { color: COLORS.action } : {}), children: entry?.displayName ?? "Selected API" }), _jsx(Text, { children: " " }), _jsx(Field, { label: "Service", value: entry?.serviceTitle ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "Service command", value: entry?.serviceCliName ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "API operation", value: entry?.operationName ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "Action", value: entry?.action ?? "—", labelWidth: labelWidth }), _jsx(Field, { label: "Support", value: entry
+                    ? entry.supported
+                        ? "Supported"
+                        : (entry.unsupportedReason ?? "Unsupported")
+                    : "—", labelWidth: labelWidth }), _jsx(Field, { label: "Required inputs", value: entry ? requiredInputs : "—", labelWidth: labelWidth }), _jsx(Field, { label: "Pagination", value: entry ? (entry.pagination ? "Page by page" : "Single response") : "—", labelWidth: labelWidth })] }));
 }
 //# sourceMappingURL=OperationDetail.js.map

@@ -9,6 +9,8 @@ import { PageScreen } from "../src/tui/screens/PageScreen.js";
 const entry: OperationEntry = {
   id: "agentcore:ListAgentRuntimes",
   mode: "list",
+  action: "LIST",
+  supported: true,
   operationName: "ListAgentRuntimes",
   displayName: "List agent runtimes",
   resourceName: "Agent runtimes",
@@ -17,12 +19,25 @@ const entry: OperationEntry = {
   serviceTitle: "Amazon Bedrock AgentCore Control",
   serviceCliName: "bedrock-agentcore-control",
   serviceVersion: "2023-06-05",
-  inputFields: [],
+  inputFields: [
+    {
+      name: "memoryId",
+      type: "string",
+      required: true,
+      sensitive: false,
+    },
+    {
+      name: "actorId",
+      type: "string",
+      required: true,
+      sensitive: false,
+    },
+  ],
 };
 
 const page: PageResult = {
   entry,
-  input: {},
+  input: { memoryId: "memory-1", actorId: "actor-1" },
   output: {},
   rows: [
     { agentRuntimeName: "research-agent", status: "READY" },
@@ -40,6 +55,7 @@ describe("PageScreen", () => {
         pages={[page]}
         pageIndex={0}
         loading={false}
+        resourcePath={["Memory", "Sessions"]}
         onNext={() => {}}
         onPrevious={() => {}}
         onBack={() => {}}
@@ -47,6 +63,11 @@ describe("PageScreen", () => {
       />,
     );
     const unfilteredFrame = screen.lastFrame()!;
+
+    expect(unfilteredFrame).toContain("Memory › Sessions");
+    expect(unfilteredFrame).toContain(
+      "ListAgentRuntimes · memoryId=memory-1 · actorId=actor-1",
+    );
 
     screen.stdin.write("/reserchagent");
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -65,5 +86,48 @@ describe("PageScreen", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(onDetail).toHaveBeenCalledWith(page.rows[0]);
+  });
+
+  it("shows a useful empty state instead of a blank value column", () => {
+    const screen = render(
+      <PageScreen
+        pages={[{ ...page, rows: [] }]}
+        pageIndex={0}
+        loading={false}
+        resourcePath={["Memory", "Actors", "Sessions"]}
+        onNext={() => {}}
+        onPrevious={() => {}}
+        onBack={() => {}}
+        onDetail={() => {}}
+      />,
+    );
+
+    expect(screen.lastFrame()).toContain(
+      "No agent runtimes returned by ListAgentRuntimes.",
+    );
+    expect(screen.lastFrame()).not.toContain(" value");
+    expect(screen.lastFrame()!.split("\n").length).toBeLessThanOrEqual(24);
+  });
+
+  it("opens modeled List inputs with E when configuration is available", async () => {
+    const onConfigure = vi.fn();
+    const screen = render(
+      <PageScreen
+        pages={[page]}
+        pageIndex={0}
+        loading={false}
+        onNext={() => {}}
+        onPrevious={() => {}}
+        onBack={() => {}}
+        onDetail={() => {}}
+        onConfigure={onConfigure}
+      />,
+    );
+
+    expect(screen.lastFrame()).toContain("E Inputs");
+    screen.stdin.write("e");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(onConfigure).toHaveBeenCalledOnce();
   });
 });

@@ -1,5 +1,5 @@
 import { normalizeSearch, SmithyCatalog } from "../model/catalog.js";
-import type { OperationEntry, OperationMode } from "../model/types.js";
+import type { OperationEntry, SupportedOperationMode } from "../model/types.js";
 
 export class AmbiguousSearchError extends Error {
   public constructor(public readonly matches: OperationEntry[]) {
@@ -10,7 +10,7 @@ export class AmbiguousSearchError extends Error {
 
 export async function resolveOperation(
   search: string,
-  mode: OperationMode,
+  mode: SupportedOperationMode,
 ): Promise<OperationEntry> {
   const catalog = await SmithyCatalog.load();
   const matches = catalog.search(search, mode);

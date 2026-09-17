@@ -1,7 +1,13 @@
 import type { InputField, OperationEntry } from "../model/types.js";
+import { defaultInputValues } from "../model/input-values.js";
+
+type ParseInputOptions = {
+  includeDefaults?: boolean;
+};
 
 function coerce(value: string, field: InputField | undefined): unknown {
   if (!field) return value;
+  const type = field.type.toLowerCase();
   if (
     [
       "byte",
@@ -10,25 +16,27 @@ function coerce(value: string, field: InputField | undefined): unknown {
       "long",
       "float",
       "double",
-      "bigInteger",
-      "bigDecimal",
-    ].includes(field.type)
+      "biginteger",
+      "bigdecimal",
+      "intenum",
+    ].includes(type)
   ) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed))
       throw new Error(`${field.name} must be a number.`);
     return parsed;
   }
-  if (field.type === "boolean") {
+  if (type === "boolean") {
     if (value === "true") return true;
     if (value === "false") return false;
     throw new Error(`${field.name} must be true or false.`);
   }
   if (
-    field.type === "list" ||
-    field.type === "map" ||
-    field.type === "structure" ||
-    field.type === "union"
+    type === "list" ||
+    type === "map" ||
+    type === "structure" ||
+    type === "union" ||
+    type === "document"
   ) {
     try {
       return JSON.parse(value);
@@ -42,8 +50,10 @@ function coerce(value: string, field: InputField | undefined): unknown {
 export function parseInputPairs(
   entry: OperationEntry,
   pairs: string[],
+  options: ParseInputOptions = {},
 ): Record<string, unknown> {
-  const input: Record<string, unknown> = {};
+  const input: Record<string, unknown> =
+    options.includeDefaults === false ? {} : defaultInputValues(entry);
   for (const pair of pairs) {
     const separator = pair.indexOf("=");
     if (separator <= 0)

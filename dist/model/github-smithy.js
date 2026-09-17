@@ -127,6 +127,30 @@ function getInputFields(model, operation) {
     return Object.entries(input.members ?? {}).map(([name, member]) => {
         const target = model.shapes[member.target];
         const length = target?.traits?.["smithy.api#length"];
+        const hasMemberDefault = Object.prototype.hasOwnProperty.call(member.traits ?? {}, "smithy.api#default");
+        const memberDefault = member.traits?.["smithy.api#default"];
+        const targetDefault = target?.traits?.["smithy.api#default"];
+        const defaultValue = hasMemberDefault
+            ? memberDefault !== null
+                ? memberDefault
+                : undefined
+            : targetDefault !== undefined && targetDefault !== null
+                ? targetDefault
+                : undefined;
+        const enumValues = target?.type === "enum" || target?.type === "intEnum"
+            ? Object.entries(target.members ?? {}).map(([memberName, enumMember]) => {
+                const value = enumMember.traits?.["smithy.api#enumValue"];
+                return typeof value === "string" || typeof value === "number"
+                    ? value
+                    : memberName;
+            })
+            : Array.isArray(target?.traits?.["smithy.api#enum"])
+                ? target.traits["smithy.api#enum"]
+                    .map((enumMember) => enumMember.value)
+                    .filter((value) => {
+                    return typeof value === "string" || typeof value === "number";
+                })
+                : undefined;
         const documentation = stripHtml(member.traits?.["smithy.api#documentation"]);
         return {
             name,
@@ -137,6 +161,8 @@ function getInputFields(model, operation) {
                     resourceIdentifier: member.traits["smithy.api#resourceIdentifier"],
                 }
                 : {}),
+            ...(defaultValue !== undefined ? { defaultValue } : {}),
+            ...(enumValues?.length ? { enumValues } : {}),
             required: Boolean(member.traits?.["smithy.api#required"]),
             sensitive: Boolean(member.traits?.["smithy.api#sensitive"] ??
                 target?.traits?.["smithy.api#sensitive"]),
@@ -214,6 +240,8 @@ function createOperationEntry(service, model, operationId, operation) {
     return {
         id: `${service.cliName}:${operationName}`,
         mode: "get",
+        action: operationName.startsWith("Describe") ? "DESCRIBE" : "GET",
+        supported: true,
         operationName,
         displayName: humanize(operationName),
         resourceName: humanize(resourceName),

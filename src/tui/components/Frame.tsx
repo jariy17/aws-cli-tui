@@ -8,22 +8,24 @@ export function frameHeaderHeight(
   columns: number,
   title: string,
   metadata?: string,
+  context?: string,
 ): number {
   const titleText = `>_ AWS TUI · ${title}`;
-  return metadata !== undefined &&
-    titleText.length + metadata.length + 9 > columns
-    ? 4
-    : 3;
+  const stackHeader =
+    metadata !== undefined && titleText.length + metadata.length + 9 > columns;
+  return (stackHeader ? 4 : 3) + (context ? 1 : 0);
 }
 
 export function Frame({
   title,
   metadata,
+  context,
   help,
   children,
 }: {
   title: string;
   metadata?: string;
+  context?: string;
   help: string;
   children: ReactNode;
 }) {
@@ -39,16 +41,25 @@ export function Frame({
         borderStyle="single"
         borderColor={COLORS.accent}
         paddingX={1}
-        flexDirection={stackHeader ? "column" : "row"}
-        justifyContent={stackHeader ? "flex-start" : "space-between"}
+        flexDirection="column"
         width="100%"
       >
-        <Text bold color={COLORS.accent} wrap="truncate-end">
-          {titleText}
-        </Text>
-        {metadata && (
+        <Box
+          flexDirection={stackHeader ? "column" : "row"}
+          justifyContent={stackHeader ? "flex-start" : "space-between"}
+        >
+          <Text bold color={COLORS.accent} wrap="truncate-end">
+            {titleText}
+          </Text>
+          {metadata && (
+            <Text dimColor wrap="truncate-end">
+              {metadata}
+            </Text>
+          )}
+        </Box>
+        {context && (
           <Text dimColor wrap="truncate-end">
-            {metadata}
+            {context}
           </Text>
         )}
       </Box>

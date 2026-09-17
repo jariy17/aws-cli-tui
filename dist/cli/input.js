@@ -1,6 +1,8 @@
+import { defaultInputValues } from "../model/input-values.js";
 function coerce(value, field) {
     if (!field)
         return value;
+    const type = field.type.toLowerCase();
     if ([
         "byte",
         "short",
@@ -8,25 +10,27 @@ function coerce(value, field) {
         "long",
         "float",
         "double",
-        "bigInteger",
-        "bigDecimal",
-    ].includes(field.type)) {
+        "biginteger",
+        "bigdecimal",
+        "intenum",
+    ].includes(type)) {
         const parsed = Number(value);
         if (!Number.isFinite(parsed))
             throw new Error(`${field.name} must be a number.`);
         return parsed;
     }
-    if (field.type === "boolean") {
+    if (type === "boolean") {
         if (value === "true")
             return true;
         if (value === "false")
             return false;
         throw new Error(`${field.name} must be true or false.`);
     }
-    if (field.type === "list" ||
-        field.type === "map" ||
-        field.type === "structure" ||
-        field.type === "union") {
+    if (type === "list" ||
+        type === "map" ||
+        type === "structure" ||
+        type === "union" ||
+        type === "document") {
         try {
             return JSON.parse(value);
         }
@@ -36,8 +40,8 @@ function coerce(value, field) {
     }
     return value;
 }
-export function parseInputPairs(entry, pairs) {
-    const input = {};
+export function parseInputPairs(entry, pairs, options = {}) {
+    const input = options.includeDefaults === false ? {} : defaultInputValues(entry);
     for (const pair of pairs) {
         const separator = pair.indexOf("=");
         if (separator <= 0)

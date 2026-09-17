@@ -1,7 +1,7 @@
 {
   "name": "aws-cli-tui",
   "version": "0.1.1",
-  "description": "Search-first terminal UI for read-only AWS CLI operations generated from public Smithy models",
+  "description": "Search-first terminal UI for AWS CLI operations generated from public Smithy models",
   "type": "module",
   "bin": {
     "awstui": "dist/cli/index.js"
@@ -27,7 +27,8 @@
   "dependencies": {
     "commander": "^14.0.2",
     "ink": "^6.6.0",
-    "react": "^19.2.3"
+    "react": "^19.2.3",
+    "react-router": "^7.18.4"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",

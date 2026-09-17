@@ -6,8 +6,11 @@ function truncate(value, width) {
         return value;
     return `${value.slice(0, Math.max(1, width - 1))}…`;
 }
-export function TableView({ rows, selectedIndex, visibleRowCount, }) {
+export function TableView({ rows, selectedIndex, visibleRowCount, emptyMessage = "No resources returned.", }) {
     const { stdout } = useStdout();
+    if (rows.length === 0) {
+        return (_jsx(Box, { height: visibleRowCount + 1, paddingLeft: 2, children: _jsx(Text, { dimColor: true, children: emptyMessage }) }));
+    }
     const terminalWidth = stdout?.columns ?? 100;
     const table = projectTable(rows, terminalWidth < 90 ? 3 : 5);
     const contentWidth = Math.max(30, terminalWidth - 8);

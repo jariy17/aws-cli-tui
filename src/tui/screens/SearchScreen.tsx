@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import { Frame, frameHeaderHeight } from "../components/Frame.js";
 import { HELP } from "../constants.js";
 import type { SmithyCatalog } from "../../model/catalog.js";
-import type { OperationEntry, OperationMode } from "../../model/types.js";
+import type {
+  OperationEntry,
+  SupportedOperationMode,
+} from "../../model/types.js";
+import { hasDefaultValue } from "../../model/input-values.js";
 
 function normalizedInput(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9:]/g, "");
@@ -16,7 +20,7 @@ export function SearchScreen({
   onSelect,
 }: {
   catalog: SmithyCatalog;
-  initialMode?: OperationMode;
+  initialMode?: SupportedOperationMode;
   onSelect: (entry: OperationEntry) => void;
 }) {
   const { exit } = useApp();
@@ -26,90 +30,94 @@ export function SearchScreen({
   const title = initialMode
     ? `${initialMode.toUpperCase()} SEARCH`
     : "GLOBAL SEARCH";
-  const metadata = `${catalog.metadata().operationCount.toLocaleString()} read APIs`;
+  const metadata = `${catalog.metadata().operationCount.toLocaleString()} AWS APIs`;
   const apiWidth = Math.max(14, Math.floor(terminalWidth * 0.28));
-  const modeWidth = 7;
+  const actionWidth = 10;
   const serviceWidth = Math.max(16, Math.floor(terminalWidth * 0.32));
   const resourceWidth = Math.max(
     12,
-    terminalWidth - apiWidth - modeWidth - serviceWidth - 8,
+    terminalWidth - apiWidth - actionWidth - serviceWidth - 8,
   );
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
   const matches = useMemo(
-    () => catalog.search(query, initialMode, 20),
+    () => catalog.search(query, initialMode, catalog.metadata().operationCount),
     [catalog, initialMode, query],
   );
-  const selected = matches[selectedIndex] ?? matches[0];
   const maxVisibleMatches = Math.max(
     1,
     terminalHeight - frameHeaderHeight(terminalWidth, title, metadata) - 6,
   );
-  const viewportStart = Math.max(
-    0,
-    Math.min(
-      selectedIndex - Math.floor(maxVisibleMatches / 2),
-      matches.length - maxVisibleMatches,
-    ),
-  );
-  const viewportEnd = Math.min(
-    matches.length,
-    viewportStart + maxVisibleMatches,
-  );
-  const visibleMatches = matches.slice(viewportStart, viewportEnd);
+  const pageCount = Math.max(1, Math.ceil(matches.length / maxVisibleMatches));
+  const currentPage = Math.min(pageIndex, pageCount - 1);
+  const pageStart = currentPage * maxVisibleMatches;
+  const pageMatches = matches.slice(pageStart, pageStart + maxVisibleMatches);
+  const selected = pageMatches[selectedIndex] ?? pageMatches[0];
   const matchSlots = Array.from(
     { length: maxVisibleMatches },
-    (_, index) => visibleMatches[index],
+    (_, index) => pageMatches[index],
   );
   const requiredInputs = selected?.inputFields.filter(
-    (field) => field.required,
+    (field) => field.required && !hasDefaultValue(field),
   );
   const selectedSummary = selected
-    ? `${selected.operationName} · ${
-        requiredInputs?.length
-          ? `Inputs: ${requiredInputs.map((field) => field.name).join(", ")}`
-          : "No required inputs"
-      } · ${selected.pagination ? "Page by page" : "Single response"}`
+    ? selected.supported
+      ? `${selected.operationName} · ${
+          requiredInputs?.length
+            ? `Inputs: ${requiredInputs.map((field) => field.name).join(", ")}`
+            : "No required inputs"
+        } · ${selected.pagination ? "Page by page" : "Single response"}`
+      : `${selected.operationName} · Unsupported · ${selected.unsupportedReason ?? "Not available"}`
     : "No API selected · Required inputs — · Pagination —";
 
   useInput((input, key) => {
-    if (key.ctrl && input === "q") {
-      exit();
-      return;
-    }
     if (key.ctrl) return;
     if (key.escape) {
       if (query) {
         setQuery("");
         setSelectedIndex(0);
+        setPageIndex(0);
       } else {
         exit();
       }
       return;
     }
-    if (key.upArrow && matches.length > 0) {
+    if (key.upArrow && pageMatches.length > 0) {
       setSelectedIndex(
-        (index) => (index - 1 + matches.length) % matches.length,
+        (index) => (index - 1 + pageMatches.length) % pageMatches.length,
       );
       return;
     }
-    if (key.downArrow && matches.length > 0) {
-      setSelectedIndex((index) => (index + 1) % matches.length);
+    if (key.downArrow && pageMatches.length > 0) {
+      setSelectedIndex((index) => (index + 1) % pageMatches.length);
       return;
     }
-    if (key.return && selected) {
+    if (key.leftArrow && currentPage > 0) {
+      setPageIndex(currentPage - 1);
+      setSelectedIndex(0);
+      return;
+    }
+    if (key.rightArrow && currentPage + 1 < pageCount) {
+      setPageIndex(currentPage + 1);
+      setSelectedIndex(0);
+      return;
+    }
+    if (key.return && selected?.supported) {
       onSelect(selected);
       return;
     }
     if (key.backspace || key.delete) {
       setQuery((value) => value.slice(0, -1));
       setSelectedIndex(0);
+      setPageIndex(0);
       return;
     }
     const next = normalizedInput(input);
     if (next) {
       setQuery((value) => `${value}${next}`);
       setSelectedIndex(0);
+      setPageIndex(0);
     }
   });
 
@@ -131,9 +139,9 @@ export function SearchScreen({
               API
             </Text>
           </Box>
-          <Box width={modeWidth}>
+          <Box width={actionWidth}>
             <Text bold dimColor>
-              MODE
+              ACTION
             </Text>
           </Box>
           <Box width={serviceWidth}>
@@ -148,8 +156,9 @@ export function SearchScreen({
           </Box>
         </Box>
         {matchSlots.map((entry, visibleIndex) => {
-          const index = viewportStart + visibleIndex;
-          const isSelected = entry !== undefined && index === selectedIndex;
+          const isSelected =
+            entry !== undefined && visibleIndex === selectedIndex;
+          const isUnsupported = entry?.supported === false;
           return (
             <Box
               key={entry?.id ?? `empty-${visibleIndex}`}
@@ -157,25 +166,42 @@ export function SearchScreen({
               columnGap={1}
             >
               <Box width={2}>
-                <Text {...(isSelected ? { color: "cyan" } : {})}>
+                <Text
+                  color={isUnsupported ? "gray" : isSelected ? "cyan" : "white"}
+                  dimColor={isUnsupported}
+                >
                   {isSelected ? "❯ " : "  "}
                 </Text>
               </Box>
               <Box width={apiWidth}>
-                <Text color={isSelected ? "cyan" : "white"} wrap="truncate-end">
+                <Text
+                  color={isUnsupported ? "gray" : isSelected ? "cyan" : "white"}
+                  dimColor={isUnsupported}
+                  wrap="truncate-end"
+                >
                   {entry?.displayName ?? " "}
                 </Text>
               </Box>
-              <Box width={modeWidth}>
-                <Text dimColor>{entry?.mode.toUpperCase() ?? " "}</Text>
+              <Box width={actionWidth}>
+                <Text {...(isUnsupported ? { color: "gray" } : {})} dimColor>
+                  {entry?.action ?? " "}
+                </Text>
               </Box>
               <Box width={serviceWidth}>
-                <Text dimColor wrap="truncate-end">
+                <Text
+                  {...(isUnsupported ? { color: "gray" } : {})}
+                  dimColor
+                  wrap="truncate-end"
+                >
                   {entry?.serviceTitle ?? " "}
                 </Text>
               </Box>
               <Box width={resourceWidth}>
-                <Text dimColor wrap="truncate-end">
+                <Text
+                  {...(isUnsupported ? { color: "gray" } : {})}
+                  dimColor
+                  wrap="truncate-end"
+                >
                   {entry
                     ? (entry.resourceNames ?? [entry.resourceName]).join(", ")
                     : " "}
@@ -187,11 +213,9 @@ export function SearchScreen({
         <Text dimColor wrap="truncate-end">
           {selectedSummary} · {matches.length} match
           {matches.length === 1 ? "" : "es"} ·{" "}
-          {selected ? `${selectedIndex + 1} selected` : "0 selected"}
-          {viewportStart > 0 ? ` · ${viewportStart} above` : ""}
-          {viewportEnd < matches.length
-            ? ` · ${matches.length - viewportEnd} below`
-            : ""}
+          {matches.length > 0
+            ? `Page ${currentPage + 1}/${pageCount} · ${pageStart + selectedIndex + 1} selected`
+            : "Page 0/0 · 0 selected"}
         </Text>
       </Box>
     </Frame>

@@ -1,8 +1,10 @@
 # aws-cli-tui
 
-Search-first terminal UI for read-only AWS APIs.
+Search-first terminal UI for AWS APIs. List, Get, and Describe operations can
+run today; every other Smithy operation remains searchable and is shown dimmed
+as unsupported.
 
-The operation catalog is generated from the public
+The complete operation catalog is generated from the public
 [`aws/api-models-aws`](https://github.com/aws/api-models-aws) Smithy JSON AST. Users search across API and resource
 names with one fuzzy, typo-tolerant no-space token. Exact normalized matches rank first. AWS service names are not a
 navigation level; the resolved service appears on operation and resource detail views.
@@ -89,12 +91,22 @@ Type a no-space search such as `agentruntime`, `listagentruntimes`, `tables`, or
 subsequences such as `agentruntmie` or `agntrntm` are supported.
 
 The search view uses the same flat table layout as List pages. It reserves fixed
-rows, shows API, mode, and service in columns, and keeps the selected
+rows, shows API, action, and service in columns, and keeps the selected
 operation's input/pagination summary beneath the table.
+
+Unsupported actions such as Create, Update, Delete, and Invoke are generated
+from the same Smithy models and shown dimmed. They can be searched and
+inspected in the result table, but Enter only runs supported List, Get, and
+Describe operations.
 
 Search and List tables fill the available terminal height regardless of result
 count. The bottom three rows are reserved for status, help, and the hidden
 debug line.
+
+Views use React Router's in-memory URL patterns. Routes identify API search,
+operation inputs, List pages, selected entries, resource details, and related
+resources. Back restores the previous route state, and stale asynchronous
+responses cannot replace a newer view.
 
 Prefix a no-space query with `service:` or `resource:` to scope it:
 
@@ -109,8 +121,15 @@ available and falls back to the operation-derived resource name.
 ## Direct commands
 
 ```bash
-# Parameterless List API; returns the first API page as JSON
+# List API; returns the first API page as JSON
 awstui list agentruntime --profile my-profile --region us-west-2
+
+# List API with required Smithy inputs
+awstui list memoryrecords \
+  --input memoryId=my-memory-id \
+  --input namespace=/users/example \
+  --profile my-profile \
+  --region us-west-2
 
 # Get/Describe API; repeat --input for required identifiers
 awstui get agentruntime \
@@ -119,29 +138,56 @@ awstui get agentruntime \
   --region us-west-2
 ```
 
-List operations with required API inputs are excluded from the catalog. Continuation tokens are managed internally in
-the TUI: `N` loads the next API page and `B` returns to the cached previous page. Press `/` on a List page to fuzzy
-search only the rows already loaded for that page; this never makes another AWS request.
+List operations open an input view only for unresolved required Smithy inputs.
+Optional inputs are omitted initially, pagination tokens are managed
+internally, and modeled defaults are included automatically. Press `E` on a
+List page to configure its optional Smithy inputs and rerun from page 1.
+Booleans and enums render as filterable dropdowns. Left and Right move between
+API pages. Press `/` on a List page to fuzzy search only the rows already
+loaded for that page; this never makes another AWS request.
 
-Pressing Enter on a scalar List row can open its related detail API when that
-API has exactly one compatible required input. For example, a DynamoDB table
-name from `ListTables` is passed to `DescribeTable` as `TableName`.
+Pressing Enter on a List row opens a compatible Get/Describe detail API when
+its Smithy-declared inputs can be filled exactly from the selected row and the
+original List request. Selected-row values take precedence. For example, a
+DynamoDB table name from `ListTables` is passed to `DescribeTable` as
+`TableName`; `GetMemoryRecord` combines a selected `memoryRecordId` with the
+`memoryId` entered for `ListMemoryRecords`.
 
 ## TUI controls
 
 - Type letters or numbers: update the global fuzzy no-space search
 - Up/Down: select a matching API, list row, or JSON entry
+- Left/Right: move between result, API, or detail pages
 - Enter: run an API or open/get the selected row
-- `/` on a List page: fuzzy search the current page
-- `N` / `B`: next/previous list page
+- `/` outside the main search: fuzzy filter the current view
+- `E` on a List page: configure optional inputs and rerun from page 1
+- `R` on a resource detail page: open its related resources
 - Escape: clear search or go back
-- Ctrl+Q: quit
+
+Resource views keep the navigation route and resolved Smithy keys in the
+header. For example:
+
+```text
+>_ AWS TUI · Memory › Sessions       Amazon Bedrock AgentCore · Page 2/2
+ListSessions · memoryId=mem-123 · actorId=actor-456 · maxResults=100
+```
 
 The detail page shows:
 
 - Friendly AWS service title and Smithy operation in the header
 - Syntax-colored, pretty-printed resource or Get response JSON
 - Focusable JSON entries, with verified ARN values available to open
+- Related child collections whose List inputs can inherit a parent identifier
+
+Related resources prefer explicit Smithy `resources` relationships. When a
+model does not declare a child resource, the catalog conservatively offers a
+List operation only when it shares the modeled parent resource, belongs to the
+same AWS service family, and can inherit a parent identifier exactly. For
+example, `GetMemory` can open `ListMemoryRecords`, while
+`GetPaymentManager` follows the explicit Smithy child relationship to
+`ListPaymentConnectors`. Press `R`, or move to the related-resources entry and
+press Enter, then select the child collection and enter any inputs that were
+not inherited.
 
 On a detail page, only ARNs that resolve to an unambiguous read operation are
 highlighted and selectable. Other ARN strings, such as a DynamoDB `IndexArn`

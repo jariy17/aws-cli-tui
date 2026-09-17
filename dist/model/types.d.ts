@@ -1,9 +1,12 @@
-export type OperationMode = "list" | "get";
+export type SupportedOperationMode = "list" | "get";
+export type OperationMode = SupportedOperationMode | "unsupported";
 export type InputField = {
     name: string;
     type: string;
     target?: string;
     resourceIdentifier?: string;
+    defaultValue?: unknown;
+    enumValues?: Array<string | number>;
     required: boolean;
     sensitive: boolean;
     pattern?: string;
@@ -16,13 +19,22 @@ export type Pagination = {
     outputToken: string;
     items?: string;
 };
+export type ListItemField = {
+    name: string;
+    type: string;
+    target?: string;
+};
 export type OperationEntry = {
     id: string;
     mode: OperationMode;
+    action: string;
+    supported: boolean;
+    unsupportedReason?: string;
     operationName: string;
     displayName: string;
     resourceName: string;
     resourceNames?: string[];
+    resourceIds?: string[];
     searchKeys: string[];
     serviceId: string;
     serviceTitle: string;
@@ -31,7 +43,20 @@ export type OperationEntry = {
     modelFile?: string;
     documentation?: string;
     inputFields: InputField[];
+    listItemFields?: ListItemField[];
     pagination?: Pagination;
+};
+export type ResourceIdentifier = {
+    name: string;
+    target: string;
+};
+export type ResourceEntry = {
+    id: string;
+    name: string;
+    serviceCliName: string;
+    identifiers: ResourceIdentifier[];
+    operationIds: string[];
+    childResourceIds: string[];
 };
 export type ServiceEntry = {
     id: string;
@@ -53,5 +78,6 @@ export type Catalog = {
     };
     operationCount: number;
     operations: OperationEntry[];
+    resources?: ResourceEntry[];
     services?: ServiceEntry[];
 };

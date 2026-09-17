@@ -3,7 +3,7 @@ import React from "react";
 
 import type { AwsContext } from "../execution/types.js";
 import { SmithyCatalog } from "../model/catalog.js";
-import type { OperationMode } from "../model/types.js";
+import type { SupportedOperationMode } from "../model/types.js";
 import { App } from "./App.js";
 import { DebugProvider } from "./debug.js";
 
@@ -12,7 +12,7 @@ export async function renderTui({
   mode,
 }: {
   context: AwsContext;
-  mode?: OperationMode;
+  mode?: SupportedOperationMode;
 }): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error(

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Frame } from "../components/Frame.js";
 import { JsonView, arnOccurrenceKey, findArnOccurrences, } from "../components/JsonView.js";
 import { HELP } from "../constants.js";
-export function DetailScreen({ detail, onBack, onCheckArn, onOpenArn, }) {
+import { formatOperationContext, formatResourcePath, rootResourcePath, } from "../resource-route.js";
+export function DetailScreen({ detail, onBack, onCheckArn, onOpenArn, relatedCount = 0, onRelated, resourcePath, }) {
     const occurrences = useMemo(() => findArnOccurrences(detail.value), [detail.value]);
     const [checkingArns, setCheckingArns] = useState(occurrences.length > 0);
     const [resolvableArns, setResolvableArns] = useState(new Set());
@@ -26,6 +27,6 @@ export function DetailScreen({ detail, onBack, onCheckArn, onOpenArn, }) {
             active = false;
         };
     }, [occurrences, onCheckArn]);
-    return (_jsx(Frame, { title: "RESOURCE DETAIL", metadata: `${detail.entry.serviceTitle} · ${detail.entry.operationName}`, help: HELP.detail, children: _jsx(JsonView, { value: detail.value, resolvableArns: resolvableArns, checkingArns: checkingArns, onOpenArn: onOpenArn, onBack: onBack }) }));
+    return (_jsx(Frame, { title: formatResourcePath(resourcePath ?? rootResourcePath(detail.entry)), metadata: `${detail.entry.serviceTitle} · ${detail.source === "get response" ? "Full resource" : "List entry"}`, context: formatOperationContext(detail.entry, detail.input ?? {}), help: HELP.detail, children: _jsx(JsonView, { value: detail.value, resolvableArns: resolvableArns, checkingArns: checkingArns, onOpenArn: onOpenArn, relatedCount: relatedCount, ...(onRelated ? { onRelated } : {}), onBack: onBack }) }));
 }
 //# sourceMappingURL=DetailScreen.js.map

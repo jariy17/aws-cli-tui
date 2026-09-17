@@ -1,4 +1,4 @@
-import { Text, useApp, useInput } from "ink";
+import { Text, useInput } from "ink";
 
 import { Frame } from "../components/Frame.js";
 
@@ -13,17 +13,12 @@ export function StatusScreen({
   error?: boolean;
   onBack?: () => void;
 }) {
-  const { exit } = useApp();
-  useInput((input, key) => {
-    if (key.ctrl && input === "q") exit();
-    else if (key.escape) onBack?.();
+  useInput((_input, key) => {
+    if (key.escape) onBack?.();
   });
 
   return (
-    <Frame
-      title={title}
-      help={onBack ? "Esc back · Ctrl+Q quit" : "Ctrl+Q quit"}
-    >
+    <Frame title={title} help={onBack ? "Esc Back" : "Working…"}>
       <Text color={error ? "red" : "cyan"}>{message}</Text>
     </Frame>
   );

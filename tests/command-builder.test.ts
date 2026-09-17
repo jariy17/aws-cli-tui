@@ -6,10 +6,13 @@ import {
 } from "../src/execution/command-builder.js";
 import { AwsCliExecutor } from "../src/execution/aws-cli-executor.js";
 import type { OperationEntry } from "../src/model/types.js";
+import { parseInputPairs } from "../src/cli/input.js";
 
 const entry: OperationEntry = {
   id: "agentcore:ListAgentRuntimes",
   mode: "list",
+  action: "LIST",
+  supported: true,
   operationName: "ListAgentRuntimes",
   displayName: "List agent runtimes",
   resourceName: "Agent runtimes",
@@ -92,5 +95,45 @@ describe("AWS CLI command builder", () => {
     );
     expect(command).toContain("***");
     expect(command).not.toContain("secret-value");
+  });
+
+  it("uses modeled defaults and lets explicit inputs override them", () => {
+    const operation: OperationEntry = {
+      ...entry,
+      inputFields: [
+        {
+          name: "maxResults",
+          type: "Integer",
+          defaultValue: 100,
+          required: false,
+          sensitive: false,
+        },
+        {
+          name: "includePayloads",
+          type: "Boolean",
+          defaultValue: true,
+          required: false,
+          sensitive: false,
+        },
+      ],
+    };
+
+    expect(parseInputPairs(operation, [])).toEqual({
+      maxResults: 100,
+      includePayloads: true,
+    });
+    expect(
+      parseInputPairs(operation, ["maxResults=25", "includePayloads=false"]),
+    ).toEqual({
+      maxResults: 25,
+      includePayloads: false,
+    });
+    expect(
+      parseInputPairs(operation, ["includePayloads=false"], {
+        includeDefaults: false,
+      }),
+    ).toEqual({
+      includePayloads: false,
+    });
   });
 });

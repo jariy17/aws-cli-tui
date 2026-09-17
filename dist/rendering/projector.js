@@ -41,6 +41,9 @@ function columnScore(name) {
     return 100;
 }
 export function projectTable(rows, maxColumns = 5) {
+    if (rows.length === 0) {
+        return { columns: [], rows: [] };
+    }
     const objectRows = rows.filter((row) => Boolean(row) && typeof row === "object" && !Array.isArray(row));
     if (objectRows.length === 0) {
         return {
@@ -61,6 +64,27 @@ export function displayValue(value) {
     if (typeof value === "number" || typeof value === "boolean")
         return String(value);
     return JSON.stringify(value);
+}
+function identifierStem(name) {
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    for (const suffix of ["identifier", "id", "arn", "name"]) {
+        if (normalized.endsWith(suffix) && normalized.length > suffix.length) {
+            return normalized.slice(0, -suffix.length);
+        }
+    }
+    return undefined;
+}
+function identifierRank(name) {
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normalized.endsWith("id"))
+        return 0;
+    if (normalized.endsWith("identifier"))
+        return 1;
+    if (normalized.endsWith("arn"))
+        return 2;
+    if (normalized.endsWith("name"))
+        return 3;
+    return 4;
 }
 function collectSearchValues(value, values, depth = 0) {
     if (values.length >= 100 ||
@@ -107,14 +131,30 @@ export function fuzzyFilterRows(rows, queryValue) {
         .sort((left, right) => left.score - right.score || left.index - right.index)
         .map((result) => result.row);
 }
-export function inferGetInput(entry, row) {
+export function inferGetInput(entry, row, pageInput = {}, listEntry) {
     const requiredFields = entry.inputFields.filter((candidate) => candidate.required);
+    const input = {};
+    const copyMatchingFields = (record, overwrite) => {
+        let matches = 0;
+        for (const field of entry.inputFields) {
+            if (!overwrite && input[field.name] !== undefined)
+                continue;
+            const matchingKey = Object.keys(record).find((key) => key.toLowerCase() === field.name.toLowerCase());
+            if (matchingKey && record[matchingKey] !== undefined) {
+                input[field.name] = record[matchingKey];
+                matches += 1;
+            }
+        }
+        return matches;
+    };
+    copyMatchingFields(pageInput, false);
     if (typeof row === "string" ||
         typeof row === "number" ||
         typeof row === "boolean") {
-        if (requiredFields.length !== 1)
+        const missingRequired = requiredFields.filter((field) => input[field.name] === undefined);
+        if (missingRequired.length !== 1)
             return undefined;
-        const [field] = requiredFields;
+        const [field] = missingRequired;
         const type = field.type.toLowerCase();
         const compatible = (typeof row === "string" && type.includes("string")) ||
             (typeof row === "boolean" && type === "boolean") ||
@@ -131,18 +171,59 @@ export function inferGetInput(entry, row) {
                 ]
                     .map((value) => value.toLowerCase())
                     .includes(type));
-        return compatible ? { [field.name]: row } : undefined;
+        if (!compatible)
+            return undefined;
+        input[field.name] = row;
+        return input;
     }
     if (!row || typeof row !== "object" || Array.isArray(row))
         return undefined;
     const record = row;
-    const input = {};
-    for (const field of requiredFields) {
-        const matchingKey = Object.keys(record).find((key) => key.toLowerCase() === field.name.toLowerCase());
-        if (!matchingKey || record[matchingKey] === undefined)
-            return undefined;
-        input[field.name] = record[matchingKey];
+    let rowMatches = copyMatchingFields(record, true);
+    for (const field of entry.inputFields) {
+        if (input[field.name] !== undefined || !field.target || !listEntry)
+            continue;
+        const target = field.target.split("#").at(-1);
+        if (!target || field.target.startsWith("smithy.api#"))
+            continue;
+        const matches = (listEntry.listItemFields ?? []).filter((sourceField) => sourceField.target?.split("#").at(-1) === target &&
+            record[sourceField.name] !== undefined);
+        if (matches.length === 1) {
+            input[field.name] = record[matches[0].name];
+            rowMatches += 1;
+        }
     }
+    for (const field of requiredFields) {
+        if (input[field.name] !== undefined ||
+            field.target?.startsWith("smithy.api#")) {
+            continue;
+        }
+        const expectedStem = identifierStem(field.name);
+        if (!expectedStem)
+            continue;
+        const matches = Object.keys(record)
+            .map((name) => ({
+            name,
+            rank: identifierRank(name),
+            stem: identifierStem(name),
+            value: record[name],
+        }))
+            .filter((candidate) => candidate.stem === expectedStem &&
+            candidate.value !== undefined &&
+            candidate.value !== null &&
+            ["string", "number", "boolean"].includes(typeof candidate.value))
+            .sort((left, right) => left.rank - right.rank || left.name.localeCompare(right.name));
+        const best = matches[0];
+        if (best &&
+            matches.filter((candidate) => candidate.rank === best.rank).length === 1) {
+            input[field.name] = best.value;
+            rowMatches += 1;
+        }
+    }
+    if (rowMatches === 0)
+        return undefined;
+    if (requiredFields.some((field) => input[field.name] === undefined))
+        return undefined;
     return input;
 }
 //# sourceMappingURL=projector.js.map

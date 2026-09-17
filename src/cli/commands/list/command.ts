@@ -1,15 +1,30 @@
 import type { Command } from "commander";
 
 import { runList } from "./action.js";
+import { collectInput } from "../../input.js";
 import { awsContextFrom } from "../../options.js";
 import { AmbiguousSearchError, formatMatches } from "../../resolve.js";
+
+type ListOptions = {
+  input: string[];
+};
 
 export function registerList(program: Command): void {
   program
     .command("list")
-    .description("Search and run a parameterless AWS List API")
+    .description("Search and run an AWS List API")
     .argument("[search]", "no-space API search token")
-    .action(async function (this: Command, search?: string) {
+    .option(
+      "--input <key=value>",
+      "API input; repeat for multiple values",
+      collectInput,
+      [],
+    )
+    .action(async function (
+      this: Command,
+      search: string | undefined,
+      options: ListOptions,
+    ) {
       if (!search) {
         const { renderTui } = await import("../../../tui/render.js");
         await renderTui({ context: awsContextFrom(this), mode: "list" });
@@ -18,7 +33,11 @@ export function registerList(program: Command): void {
 
       try {
         console.log(
-          JSON.stringify(await runList(search, awsContextFrom(this)), null, 2),
+          JSON.stringify(
+            await runList(search, options.input, awsContextFrom(this)),
+            null,
+            2,
+          ),
         );
       } catch (error) {
         if (error instanceof AmbiguousSearchError) {

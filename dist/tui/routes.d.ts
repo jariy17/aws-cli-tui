@@ -1,0 +1,20 @@
+export declare const routePatterns: {
+    readonly home: "/";
+    readonly search: "/apis";
+    readonly input: "/operations/:operationId/input";
+    readonly configure: "/operations/:operationId/configure";
+    readonly pages: "/operations/:operationId/pages/:pageNumber";
+    readonly listEntry: "/operations/:operationId/pages/:pageNumber/entries/:entryKey";
+    readonly detail: "/operations/:operationId/resource";
+    readonly related: "/operations/:operationId/resource/related";
+    readonly working: "/operations/:operationId/working";
+    readonly error: "/error";
+};
+export declare function inputRoutePath(operationId: string): string;
+export declare function configureRoutePath(operationId: string): string;
+export declare function pagesRoutePath(operationId: string, pageIndex: number): string;
+export declare function listEntryRouteKey(row: unknown, rowIndex: number): string;
+export declare function listEntryRoutePath(operationId: string, pageIndex: number, entryKey: string): string;
+export declare function detailRoutePath(operationId: string): string;
+export declare function relatedRoutePath(operationId: string): string;
+export declare function workingRoutePath(operationId: string): string;

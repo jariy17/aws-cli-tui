@@ -18,6 +18,7 @@ const outputPath = fileURLToPath(
 );
 const services = await readdir(modelsRoot, { withFileTypes: true });
 const operations = [];
+const resourceEntries = [];
 const serviceEntries = [];
 
 function normalize(value) {
@@ -51,6 +52,39 @@ function stripHtml(value) {
   return text || undefined;
 }
 
+function getDefaultValue(member, targetShape) {
+  const memberTraits = member.traits ?? {};
+  const targetTraits = targetShape?.traits ?? {};
+  if (
+    Object.prototype.hasOwnProperty.call(memberTraits, "smithy.api#default")
+  ) {
+    return memberTraits["smithy.api#default"] ?? undefined;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(targetTraits, "smithy.api#default") &&
+    targetTraits["smithy.api#default"] !== null
+  ) {
+    return targetTraits["smithy.api#default"];
+  }
+  return undefined;
+}
+
+function getEnumValues(shape) {
+  if (!shape) return undefined;
+  if (shape.type === "enum" || shape.type === "intEnum") {
+    return Object.entries(shape.members ?? {}).map(
+      ([name, member]) => member.traits?.["smithy.api#enumValue"] ?? name,
+    );
+  }
+  const trait = shape.traits?.["smithy.api#enum"];
+  if (!Array.isArray(trait)) return undefined;
+  return trait
+    .map((entry) =>
+      typeof entry === "object" && entry !== null ? entry.value : undefined,
+    )
+    .filter((value) => typeof value === "string" || typeof value === "number");
+}
+
 function getInputFields(model, operation) {
   const target = operation.input?.target;
   const input = target ? model.shapes[target] : undefined;
@@ -59,6 +93,8 @@ function getInputFields(model, operation) {
   return Object.entries(input.members ?? {}).map(([name, member]) => {
     const targetShape = model.shapes[member.target];
     const length = targetShape?.traits?.["smithy.api#length"];
+    const defaultValue = getDefaultValue(member, targetShape);
+    const enumValues = getEnumValues(targetShape);
     return {
       name,
       type: targetShape?.type ?? shapeName(member.target),
@@ -68,6 +104,8 @@ function getInputFields(model, operation) {
             resourceIdentifier: member.traits["smithy.api#resourceIdentifier"],
           }
         : {}),
+      ...(defaultValue !== undefined ? { defaultValue } : {}),
+      ...(enumValues?.length ? { enumValues } : {}),
       required: Boolean(member.traits?.["smithy.api#required"]),
       sensitive: Boolean(
         member.traits?.["smithy.api#sensitive"] ??
@@ -83,8 +121,49 @@ function getInputFields(model, operation) {
   });
 }
 
-function getOperationResources(model) {
-  const resources = new Map();
+function getListItemFields(model, operation, paginationTrait) {
+  const outputTarget = operation.output?.target;
+  let shape = outputTarget ? model.shapes[outputTarget] : undefined;
+  if (!shape) return undefined;
+
+  if (paginationTrait?.items) {
+    for (const part of paginationTrait.items.split(".")) {
+      if (shape.type !== "structure") return undefined;
+      const member = shape.members?.[part];
+      shape = member ? model.shapes[member.target] : undefined;
+      if (!shape) return undefined;
+    }
+  } else if (shape.type === "structure") {
+    const listMember = Object.values(shape.members ?? {}).find(
+      (member) => model.shapes[member.target]?.type === "list",
+    );
+    shape = listMember ? model.shapes[listMember.target] : undefined;
+  }
+
+  if (shape?.type !== "list") return undefined;
+  const itemTarget = shape.member?.target;
+  const itemShape = itemTarget ? model.shapes[itemTarget] : undefined;
+  if (!itemTarget || !itemShape) return undefined;
+  if (itemShape.type !== "structure") {
+    return [
+      {
+        name: "value",
+        type: itemShape.type,
+        target: itemTarget,
+      },
+    ];
+  }
+
+  return Object.entries(itemShape.members ?? {}).map(([name, member]) => ({
+    name,
+    type: model.shapes[member.target]?.type ?? shapeName(member.target),
+    target: member.target,
+  }));
+}
+
+function getResourceMetadata(model, serviceCliName) {
+  const operationResources = new Map();
+  const entries = [];
 
   for (const [resourceId, resource] of Object.entries(model.shapes ?? {})) {
     if (resource.type !== "resource") continue;
@@ -102,15 +181,35 @@ function getOperationResources(model) {
         (operation) => operation.target,
       ),
     ].filter(Boolean);
+    const operationIds = targets.map(
+      (target) => `${serviceCliName}:${shapeName(target)}`,
+    );
+    entries.push({
+      id: resourceId,
+      name: resourceName,
+      serviceCliName,
+      identifiers: Object.entries(resource.identifiers ?? {}).map(
+        ([name, identifier]) => ({
+          name,
+          target: identifier.target,
+        }),
+      ),
+      operationIds,
+      childResourceIds: (resource.resources ?? [])
+        .map((child) => child.target)
+        .filter(Boolean),
+    });
 
     for (const target of targets) {
-      const names = resources.get(target) ?? [];
-      if (!names.includes(resourceName)) names.push(resourceName);
-      resources.set(target, names);
+      const modeledResources = operationResources.get(target) ?? [];
+      if (!modeledResources.some((candidate) => candidate.id === resourceId)) {
+        modeledResources.push({ id: resourceId, name: resourceName });
+      }
+      operationResources.set(target, modeledResources);
     }
   }
 
-  return resources;
+  return { entries, operationResources };
 }
 
 function toEntry({
@@ -121,33 +220,36 @@ function toEntry({
   modelFile,
   operationId,
   operation,
-  modeledResourceNames,
+  modeledResources,
 }) {
   const operationName = shapeName(operationId);
   const isList = operationName.startsWith("List");
   const isGet =
     operationName.startsWith("Get") || operationName.startsWith("Describe");
-  if (!isList && !isGet) return undefined;
-
-  const inputFields = getInputFields(model, operation);
-  if (isList && inputFields.some((field) => field.required)) return undefined;
+  const mode = isList ? "list" : isGet ? "get" : "unsupported";
+  const supported = mode !== "unsupported";
+  const inputFields = supported ? getInputFields(model, operation) : [];
+  const paginationTrait = supported
+    ? operation.traits?.["smithy.api#paginated"]
+    : undefined;
+  const listItemFields =
+    supported && isList
+      ? getListItemFields(model, operation, paginationTrait)
+      : undefined;
 
   const serviceTrait = serviceShape.traits?.["aws.api#service"] ?? {};
   const serviceTitle =
     serviceShape.traits?.["smithy.api#title"] ??
     serviceTrait.sdkId ??
     humanize(serviceCliName);
-  const actionPrefix = operationName.startsWith("Describe")
-    ? "Describe"
-    : isList
-      ? "List"
-      : "Get";
-  const inferredResourceName = humanize(
-    operationName.slice(actionPrefix.length),
-  );
-  const resourceNames = (
-    modeledResourceNames?.length ? modeledResourceNames : [inferredResourceName]
-  ).filter(
+  const displayName = humanize(operationName);
+  const [actionWord = operationName, ...resourceWords] = displayName.split(" ");
+  const action = actionWord.toUpperCase();
+  const inferredResourceName = resourceWords.join(" ") || displayName;
+  const resourceNames = [
+    ...(modeledResources ?? []).map((resource) => resource.name),
+    inferredResourceName,
+  ].filter(
     (value, index, values) =>
       value &&
       values.findIndex(
@@ -155,8 +257,9 @@ function toEntry({
       ) === index,
   );
   const resourceName = inferredResourceName;
-  const displayName = humanize(operationName);
-  const paginationTrait = operation.traits?.["smithy.api#paginated"];
+  const unsupportedReason = supported
+    ? undefined
+    : "Only List, Get, and Describe operations are supported.";
   const pagination = paginationTrait
     ? {
         inputToken: paginationTrait.inputToken,
@@ -164,26 +267,32 @@ function toEntry({
         ...(paginationTrait.items ? { items: paginationTrait.items } : {}),
       }
     : undefined;
-  const documentation = stripHtml(
-    operation.traits?.["smithy.api#documentation"],
-  );
+  const documentation = supported
+    ? stripHtml(operation.traits?.["smithy.api#documentation"])
+    : undefined;
   const searchKeys = [
     normalize(operationName),
     normalize(displayName),
     ...[...resourceNames, inferredResourceName].flatMap((name) => [
       normalize(name),
       normalize(name.replace(/s$/, "")),
-      normalize(`${actionPrefix}${name}`),
+      normalize(`${actionWord}${name}`),
     ]),
   ].filter((value, index, values) => value && values.indexOf(value) === index);
 
   return {
     id: `${serviceCliName}:${operationName}`,
-    mode: isList ? "list" : "get",
+    mode,
+    action,
+    supported,
+    ...(unsupportedReason ? { unsupportedReason } : {}),
     operationName,
     displayName,
     resourceName,
     resourceNames,
+    ...((modeledResources?.length ?? 0) > 0
+      ? { resourceIds: modeledResources.map((resource) => resource.id) }
+      : {}),
     searchKeys,
     serviceId,
     serviceTitle,
@@ -192,6 +301,7 @@ function toEntry({
     modelFile,
     ...(documentation ? { documentation } : {}),
     inputFields,
+    ...(listItemFields?.length ? { listItemFields } : {}),
     ...(pagination ? { pagination } : {}),
   };
 }
@@ -261,7 +371,8 @@ for (const serviceDirectory of services) {
       : {}),
   });
 
-  const operationResources = getOperationResources(model);
+  const resourceMetadata = getResourceMetadata(model, serviceCliName);
+  resourceEntries.push(...resourceMetadata.entries);
   for (const [operationId, operation] of Object.entries(model.shapes)) {
     if (operation.type !== "operation") continue;
     const entry = toEntry({
@@ -272,7 +383,7 @@ for (const serviceDirectory of services) {
       modelFile,
       operationId,
       operation,
-      modeledResourceNames: operationResources.get(operationId),
+      modeledResources: resourceMetadata.operationResources.get(operationId),
     });
     if (entry) operations.push(entry);
   }
@@ -301,6 +412,7 @@ const catalog = {
   },
   operationCount: operations.length,
   operations,
+  resources: resourceEntries,
   services: serviceEntries,
 };
 

@@ -32,6 +32,8 @@ describe("result projection", () => {
     const getEntry: OperationEntry = {
       id: "agentcore:GetAgentRuntime",
       mode: "get",
+      action: "GET",
+      supported: true,
       operationName: "GetAgentRuntime",
       displayName: "Get agent runtime",
       resourceName: "Agent runtime",
@@ -61,6 +63,8 @@ describe("result projection", () => {
     const describeTable: OperationEntry = {
       id: "dynamodb:DescribeTable",
       mode: "get",
+      action: "DESCRIBE",
+      supported: true,
       operationName: "DescribeTable",
       displayName: "Describe table",
       resourceName: "Table",
@@ -89,6 +93,8 @@ describe("result projection", () => {
     const entry: OperationEntry = {
       id: "example:GetThing",
       mode: "get",
+      action: "GET",
+      supported: true,
       operationName: "GetThing",
       displayName: "Get thing",
       resourceName: "Thing",
@@ -114,6 +120,138 @@ describe("result projection", () => {
     };
 
     expect(inferGetInput(entry, "thing-1")).toBeUndefined();
+  });
+
+  it("combines exact selected-row and List-request fields for a detail API", () => {
+    const entry: OperationEntry = {
+      id: "bedrock-agentcore:GetMemoryRecord",
+      mode: "get",
+      action: "GET",
+      supported: true,
+      operationName: "GetMemoryRecord",
+      displayName: "Get memory record",
+      resourceName: "Memory record",
+      resourceNames: ["Memory", "Memory record"],
+      searchKeys: ["getmemoryrecord", "memoryrecord"],
+      serviceId: "com.amazonaws.bedrockagentcore#AmazonBedrockAgentCore",
+      serviceTitle: "Amazon Bedrock AgentCore",
+      serviceCliName: "bedrock-agentcore",
+      serviceVersion: "2024-02-28",
+      inputFields: [
+        {
+          name: "memoryId",
+          type: "string",
+          required: true,
+          sensitive: false,
+        },
+        {
+          name: "memoryRecordId",
+          type: "string",
+          required: true,
+          sensitive: false,
+        },
+        {
+          name: "namespace",
+          type: "string",
+          required: false,
+          sensitive: false,
+        },
+      ],
+    };
+
+    expect(
+      inferGetInput(
+        entry,
+        { memoryRecordId: "record-1", memoryStrategyId: "strategy-1" },
+        { memoryId: "memory-1", namespace: "/users/example" },
+      ),
+    ).toEqual({
+      memoryId: "memory-1",
+      memoryRecordId: "record-1",
+      namespace: "/users/example",
+    });
+  });
+
+  it("does not open a parent detail using only the List request", () => {
+    const entry: OperationEntry = {
+      id: "bedrock-agentcore:GetMemory",
+      mode: "get",
+      action: "GET",
+      supported: true,
+      operationName: "GetMemory",
+      displayName: "Get memory",
+      resourceName: "Memory",
+      searchKeys: ["getmemory", "memory"],
+      serviceId: "com.amazonaws.bedrockagentcore#AmazonBedrockAgentCore",
+      serviceTitle: "Amazon Bedrock AgentCore",
+      serviceCliName: "bedrock-agentcore",
+      serviceVersion: "2024-02-28",
+      inputFields: [
+        {
+          name: "memoryId",
+          type: "string",
+          required: true,
+          sensitive: false,
+        },
+      ],
+    };
+
+    expect(
+      inferGetInput(
+        entry,
+        { memoryRecordId: "record-1" },
+        { memoryId: "memory-1" },
+      ),
+    ).toBeUndefined();
+  });
+
+  it("maps differently named List and Get identifiers through their Smithy target", () => {
+    const listEntry: OperationEntry = {
+      id: "bedrock-agentcore-control:ListMemories",
+      mode: "list",
+      action: "LIST",
+      supported: true,
+      operationName: "ListMemories",
+      displayName: "List memories",
+      resourceName: "Memories",
+      searchKeys: ["listmemories"],
+      serviceId: "example#Service",
+      serviceTitle: "Amazon Bedrock AgentCore Control",
+      serviceCliName: "bedrock-agentcore-control",
+      serviceVersion: "2023-06-05",
+      inputFields: [],
+      listItemFields: [
+        {
+          name: "id",
+          type: "string",
+          target: "com.amazonaws.bedrockagentcorecontrol#MemoryId",
+        },
+      ],
+    };
+    const getEntry: OperationEntry = {
+      ...listEntry,
+      id: "bedrock-agentcore-control:GetMemory",
+      mode: "get",
+      action: "GET",
+      operationName: "GetMemory",
+      displayName: "Get memory",
+      resourceName: "Memory",
+      searchKeys: ["getmemory"],
+      inputFields: [
+        {
+          name: "memoryId",
+          type: "string",
+          target: "com.amazonaws.bedrockagentcorecontrol#MemoryId",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      listItemFields: [],
+    };
+
+    expect(inferGetInput(getEntry, { id: "memory-1" }, {}, listEntry)).toEqual({
+      memoryId: "memory-1",
+    });
   });
 
   it.each([

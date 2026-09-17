@@ -5,7 +5,7 @@ import { addAwsOptions, awsContextFrom } from "./options.js";
 export function createProgram() {
     const program = addAwsOptions(new Command()
         .name("awstui")
-        .description("Search-first TUI for read-only AWS APIs")
+        .description("Search-first TUI for AWS APIs")
         .version("0.1.1")
         .showHelpAfterError()
         .showSuggestionAfterError());

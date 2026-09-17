@@ -8,4 +8,4 @@ export declare function extractRows(entry: OperationEntry, output: Record<string
 export declare function projectTable(rows: unknown[], maxColumns?: number): ProjectedTable;
 export declare function displayValue(value: unknown): string;
 export declare function fuzzyFilterRows(rows: unknown[], queryValue: string): unknown[];
-export declare function inferGetInput(entry: OperationEntry, row: unknown): Record<string, unknown> | undefined;
+export declare function inferGetInput(entry: OperationEntry, row: unknown, pageInput?: Record<string, unknown>, listEntry?: OperationEntry): Record<string, unknown> | undefined;

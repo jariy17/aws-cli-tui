@@ -62,8 +62,19 @@ export function OperationDetail({
         labelWidth={labelWidth}
       />
       <Field
-        label="Mode"
-        value={entry?.mode.toUpperCase() ?? "—"}
+        label="Action"
+        value={entry?.action ?? "—"}
+        labelWidth={labelWidth}
+      />
+      <Field
+        label="Support"
+        value={
+          entry
+            ? entry.supported
+              ? "Supported"
+              : (entry.unsupportedReason ?? "Unsupported")
+            : "—"
+        }
         labelWidth={labelWidth}
       />
       <Field
